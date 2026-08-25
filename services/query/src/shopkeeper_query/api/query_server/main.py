@@ -123,7 +123,7 @@ def run_query_task(
         logger.info(f"[{task_id}] 查询链执行完成")
     except Exception as e:
         update_task_status(task_id, TASK_STATUS_FAILED)
-        logger.error(f"[{task_id}] 查询链执行失败: {e}", exc_info=True)
+        logger.error("[%s] 查询链执行失败: %s", task_id, e, exc_info=True)
         if need_stream:
             from shopkeeper_common.web.sse_utils import push_to_session
 
