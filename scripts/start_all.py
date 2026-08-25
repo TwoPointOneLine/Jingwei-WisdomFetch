@@ -10,20 +10,24 @@
   4. 输出访问地址（统一入口为网关 8080）。
 
 用法：
-  uv run python scripts/start_all.py            # 启动
-  uv run python scripts/start_all.py --stop     # 停止已启动的服务
-  uv run python scripts/start_all.py --check    # 仅检查环境，不启动
+  uv run python scripts/start_all.py                # 启动（前台常驻，Ctrl+C 停止）
+  uv run python scripts/start_all.py --with-infra   # 先拉起并等待基础设施，再启动服务
+  uv run python scripts/start_all.py --stop         # 停止已启动的服务
+  uv run python scripts/start_all.py --check        # 仅检查环境，不启动
 
 说明：
   - 端口读取自 .env 的 GATEWAY_APP_PORT / AUTH_APP_PORT / IMPORT_APP_PORT /
     QUERY_APP_PORT / USER_APP_PORT（默认 8080 / 8083 / 8081 / 8082 / 8084）；
   - 服务均来自独立模块：shopkeeper_gateway / shopkeeper_auth /
     shopkeeper_knowledge / shopkeeper_query / shopkeeper_user；
-  - 基础设施容器请用：docker compose -f deploy/docker-compose.yml up -d。
+  - 默认服务启动后脚本前台常驻并实时回显日志，按 Ctrl+C（或 SIGTERM）统一停止全部服务；
+  - 基础设施容器：--with-infra 会自动 `docker compose -f deploy/docker-compose.yml up -d`
+    并轮询 healthy；否则请手动：`docker compose -f deploy/docker-compose.yml up -d`。
 """
 import argparse
 import io
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -100,6 +104,10 @@ INFRA_PROBES = [
     ("MinIO", os.getenv("MINIO_ENDPOINT", "localhost:9000")),
 ]
 
+# 基础设施容器编排文件（含 mongo / milvus / object-storage 等）
+COMPOSE_FILE = PROJECT_ROOT / "deploy" / "docker-compose.yml"
+
+
 
 # --------------------------------------------------------------------------- #
 # 工具函数
@@ -171,19 +179,49 @@ def check_infra() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# 基础设施拉起（可选）
+# --------------------------------------------------------------------------- #
+def start_infra(timeout: float = 300.0) -> bool:
+    """用 docker compose 拉起基础设施并轮询 healthy。"""
+    if not COMPOSE_FILE.exists():
+        print(f"\n[错误] 找不到编排文件：{COMPOSE_FILE}")
+        return False
+    print("\n[*] 拉起基础设施（docker compose up -d）...")
+    r = subprocess.run(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d"],
+        cwd=PROJECT_ROOT,
+    )
+    if r.returncode != 0:
+        print("      docker compose 执行失败，请检查 Docker 是否运行。")
+        return False
+
+    # 轮询各基础设施 TCP 可达（compose 用 healthcheck，这里只探端口）
+    print("[*] 等待基础设施就绪 ...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if all(tcp_probe(addr) for _, addr in INFRA_PROBES):
+            print("      基础设施全部就绪。")
+            return True
+        time.sleep(2.0)
+    print("      等待超时，部分基础设施仍不可达（详见 docker compose ps）。")
+    return False
+
+
+# --------------------------------------------------------------------------- #
 # 服务启动 / 停止
 # --------------------------------------------------------------------------- #
 def start_servers():
     print("\n[2/3] 启动服务 ...")
     procs = {}
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
     for name, cfg in _SERVERS.items():
         if port_in_use(cfg["port"]):
             print(f"      - {name} 端口 {cfg['port']} 已被占用，跳过启动（可能已在运行）")
             continue
-        log_dir = PROJECT_ROOT / "logs"
-        log_dir.mkdir(exist_ok=True)
-        stdout = (log_dir / f"{name}.log").open("a", encoding="utf-8")
-        stderr = (log_dir / f"{name}.err").open("a", encoding="utf-8")
+        # 日志同时落盘 + 实时回显到控制台
+        log_path = log_dir / f"{name}.log"
+        log_file = log_path.open("a", encoding="utf-8")
         cmd = [
             sys.executable, "-m", "uvicorn",
             cfg["module"],
@@ -191,12 +229,34 @@ def start_servers():
             "--port", str(cfg["port"]),
             "--log-level", "info",
         ]
-        print(f"      - 拉起 {name}  ->  http://{APP_HOST}:{cfg['port']}")
+        print(f"      - 拉起 {name}  ->  http://{APP_HOST}:{cfg['port']}  (日志: {log_path})")
         procs[name] = subprocess.Popen(
-            cmd, cwd=PROJECT_ROOT, stdout=stdout, stderr=stderr,
+            cmd, cwd=PROJECT_ROOT, stdout=log_file, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            bufsize=1,
         )
     return procs
+
+
+def _pump_logs(procs: dict):
+    """实时把各服务日志尾部回显到控制台（带前缀）。"""
+    import threading
+
+    def _tail(name: str, proc: subprocess.Popen):
+        prefix = f"[{name}] "
+        try:
+            for line in proc.stdout:
+                print(prefix + line.rstrip("\n"), flush=True)
+        except Exception:
+            pass
+
+    threads = []
+    for name, proc in procs.items():
+        t = threading.Thread(target=_tail, args=(name, proc), daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
 
 
 def wait_healthy(procs: dict, timeout: float = 30.0) -> bool:
@@ -204,7 +264,6 @@ def wait_healthy(procs: dict, timeout: float = 30.0) -> bool:
     deadline = time.time() + timeout
     ok = True
     for name, cfg in _SERVERS.items():
-        # 若该服务本就已在运行（未被拉起），直接探测
         ready = False
         while time.time() < deadline:
             if port_in_use(cfg["port"]):
@@ -217,34 +276,36 @@ def wait_healthy(procs: dict, timeout: float = 30.0) -> bool:
     return ok
 
 
-def stop_servers():
+def stop_servers(ports=None):
     print("\n停止服务 ...")
-    for name, cfg in _SERVERS.items():
-        if not port_in_use(cfg["port"]):
-            print(f"      - {name} 端口 {cfg['port']} 未占用")
+    targets = ports if ports else [cfg["port"] for cfg in _SERVERS.values()]
+    name_by_port = {cfg["port"]: name for name, cfg in _SERVERS.items()}
+    for port in targets:
+        if not port_in_use(port):
+            print(f"      - {name_by_port.get(port, '?')} 端口 {port} 未占用")
             continue
         if os.name == "nt":
-            # Windows: 按端口找 PID 并终止
             out = subprocess.run(
                 ["powershell", "-NoProfile", "-Command",
-                 f"(Get-NetTCPConnection -LocalPort {cfg['port']} -State Listen).OwningProcess"],
+                 f"(Get-NetTCPConnection -LocalPort {port} -State Listen).OwningProcess"],
                 capture_output=True, text=True,
             )
             pids = {p.strip() for p in out.stdout.splitlines() if p.strip()}
             for pid in pids:
                 subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
-            print(f"      - {name} :{cfg['port']} 已停止 (PID {sorted(pids)})")
+            print(f"      - {name_by_port.get(port, '?')} :{port} 已停止 (PID {sorted(pids)})")
         else:
-            # Unix: 发 SIGTERM 给监听该端口的进程
             subprocess.run(
-                ["sh", "-c", f"kill $(lsof -t -i:{cfg['port']}) 2>/dev/null"],
+                ["sh", "-c", f"kill $(lsof -t -i:{port}) 2>/dev/null"],
                 capture_output=True,
             )
-            print(f"      - {name} :{cfg['port']} 已停止")
+            print(f"      - {name_by_port.get(port, '?')} :{port} 已停止")
 
 
 def main():
     parser = argparse.ArgumentParser(description="掌柜智库一键启动")
+    parser.add_argument("--with-infra", action="store_true",
+                        help="先拉起并等待基础设施（docker compose）再启动服务")
     parser.add_argument("--stop", action="store_true", help="停止已启动的服务")
     parser.add_argument("--check", action="store_true", help="仅检查环境，不启动")
     args = parser.parse_args()
@@ -259,21 +320,48 @@ def main():
         print("\n环境检查完成（未启动服务）。")
         return
 
+    if args.with_infra:
+        if not start_infra():
+            sys.exit(1)
+
     procs = start_servers()
     ok = wait_healthy(procs)
+    if not ok:
+        print("\n[警告] 有服务未就绪，请查看上方日志 / logs/*.log")
 
     print("\n" + "=" * 60)
     print(" 启动完成！访问地址（统一入口为网关）：")
     print(f"     前端入口  : http://{APP_HOST}:{GATEWAY_PORT}/")
-    print(f"     网关       : http://{APP_HOST}:{GATEWAY_PORT}/gateway/docs")
+    print(f"     网关 API  : http://{APP_HOST}:{GATEWAY_PORT}/gateway/docs")
     print(f"     认证服务  : http://{APP_HOST}:{AUTH_PORT}/docs")
     print(f"     用户服务  : http://{APP_HOST}:{USER_PORT}/docs")
     print(f"     导入服务  : http://{APP_HOST}:{IMPORT_PORT}/html")
     print(f"     查询服务  : http://{APP_HOST}:{QUERY_PORT}/html")
     print("=" * 60)
-    print("\n停止服务：uv run python scripts/start_all.py --stop\n")
-    if not ok:
-        sys.exit(1)
+    print("\n按 Ctrl+C 停止全部服务 ...\n")
+
+    # 前台常驻：实时回显日志，Ctrl+C 优雅停止
+    try:
+        _pump_logs(procs)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\n收到停止信号，正在关闭服务 ...")
+        for name, proc in procs.items():
+            if proc.poll() is None:
+                if os.name == "nt":
+                    proc.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    proc.terminate()
+        for proc in procs.values():
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        if procs:
+            # 兜底：按端口清理可能残留的进程
+            stop_servers(list({cfg["port"] for cfg in _SERVERS.values()}))
+        print("已全部停止。")
 
 
 if __name__ == "__main__":

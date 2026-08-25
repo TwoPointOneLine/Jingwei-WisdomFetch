@@ -44,17 +44,19 @@ copy deploy\.env.example .env
 提供一键脚本，自动检查基础设施（Milvus / MongoDB / MinIO）连通性、并行拉起**网关 + 认证 + 用户 + 知识 + 问答五个服务**并等待健康：
 
 ```bash
-# 先确保基础设施已启动（Docker）
+# 最简一键（双击 run_backend.bat）：自动拉起基础设施(docker compose) + 五大后端服务，前台常驻，Ctrl+C 停止
+run_backend.bat
+
+# 或手动分步：
+# 1) 先拉起基础设施（Docker）
 docker compose -f deploy\docker-compose.yml up -d
-
-# 启动全部服务
+# 2) 启动全部服务（前台常驻，Ctrl+C 停止）；--with-infra 可合并第 1 步
 run.bat
-# 或等价命令
-uv run python scripts/start_all.py
+run.bat --with-infra
+uv run python scripts/start_all.py --with-infra
 
-# 停止
+# 停止（按端口清理进程）
 run.bat --stop
-# 或
 uv run python scripts/start_all.py --stop
 
 # 仅检查环境（不启动）
