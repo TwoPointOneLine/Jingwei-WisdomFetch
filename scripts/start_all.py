@@ -27,6 +27,8 @@
 import argparse
 import io
 import os
+import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -210,49 +212,73 @@ def start_infra(timeout: float = 300.0) -> bool:
 # --------------------------------------------------------------------------- #
 # 服务启动 / 停止
 # --------------------------------------------------------------------------- #
+def _uv_python_cmd() -> list:
+    """返回用于启动服务子进程的命令前缀。
+
+    优先使用 uv 工作区虚拟环境（依赖齐全、可 import 各业务包），
+    否则回退到当前解释器。这样即使用户用系统全局 python 调起本脚本，
+    服务子进程也能在正确的虚拟环境中运行。
+    """
+    uv = shutil.which("uv")
+    if uv:
+        # uv run 会激活工作区 .venv；--no-sync 避免每次拉依赖（首次仍需 uv sync）
+        return [uv, "run", "--no-sync", sys.executable, "-m", "uvicorn"]
+    return [sys.executable, "-m", "uvicorn"]
+
+
 def start_servers():
     print("\n[2/3] 启动服务 ...")
     procs = {}
     log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
+    base = _uv_python_cmd()
     for name, cfg in _SERVERS.items():
         if port_in_use(cfg["port"]):
             print(f"      - {name} 端口 {cfg['port']} 已被占用，跳过启动（可能已在运行）")
             continue
-        # 日志同时落盘 + 实时回显到控制台
         log_path = log_dir / f"{name}.log"
-        log_file = log_path.open("a", encoding="utf-8")
-        cmd = [
-            sys.executable, "-m", "uvicorn",
+        cmd = base + [
             cfg["module"],
             "--host", APP_HOST,
             "--port", str(cfg["port"]),
             "--log-level", "info",
         ]
         print(f"      - 拉起 {name}  ->  http://{APP_HOST}:{cfg['port']}  (日志: {log_path})")
-        procs[name] = subprocess.Popen(
-            cmd, cwd=PROJECT_ROOT, stdout=log_file, stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
-            bufsize=1,
-        )
+        print(f"        命令: {' '.join(shlex.quote(c) for c in cmd)}")
+        # stdout/stderr 走管道，由 _pump_logs 统一按 UTF-8 读、落盘并回显
+        procs[name] = {
+            "proc": subprocess.Popen(
+                cmd, cwd=PROJECT_ROOT,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+                bufsize=1, encoding="utf-8", errors="replace",
+            ),
+            "log": log_path,
+        }
     return procs
 
 
 def _pump_logs(procs: dict):
-    """实时把各服务日志尾部回显到控制台（带前缀）。"""
+    """实时回显各服务日志到控制台（带前缀），并同步落盘。"""
     import threading
 
-    def _tail(name: str, proc: subprocess.Popen):
+    def _tail(name: str, proc: subprocess.Popen, log_path):
         prefix = f"[{name}] "
         try:
-            for line in proc.stdout:
-                print(prefix + line.rstrip("\n"), flush=True)
+            with open(log_path, "a", encoding="utf-8") as fh:
+                for line in proc.stdout:
+                    line = line.rstrip("\n")
+                    fh.write(line + "\n")
+                    fh.flush()
+                    print(prefix + line, flush=True)
         except Exception:
             pass
 
     threads = []
-    for name, proc in procs.items():
-        t = threading.Thread(target=_tail, args=(name, proc), daemon=True)
+    for name, info in procs.items():
+        t = threading.Thread(
+            target=_tail, args=(name, info["proc"], info["log"]), daemon=True
+        )
         t.start()
         threads.append(t)
     for t in threads:
@@ -292,7 +318,8 @@ def stop_servers(ports=None):
             )
             pids = {p.strip() for p in out.stdout.splitlines() if p.strip()}
             for pid in pids:
-                subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
+                # /T 杀整棵进程树（含 uv run 拉起的 uvicorn 孙进程）
+                subprocess.run(["taskkill", "/F", "/T", "/PID", pid], capture_output=True)
             print(f"      - {name_by_port.get(port, '?')} :{port} 已停止 (PID {sorted(pids)})")
         else:
             subprocess.run(
@@ -347,19 +374,20 @@ def main():
         pass
     finally:
         print("\n收到停止信号，正在关闭服务 ...")
-        for name, proc in procs.items():
+        # 先尝试优雅终止 uv run 包装进程（Unix 转发 TERM，Windows 发 CTRL_BREAK）
+        for info in procs.values():
+            proc = info["proc"]
             if proc.poll() is None:
                 if os.name == "nt":
-                    proc.send_signal(signal.CTRL_BREAK_EVENT)
+                    try:
+                        proc.send_signal(signal.CTRL_BREAK_EVENT)
+                    except Exception:
+                        pass
                 else:
                     proc.terminate()
-        for proc in procs.values():
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+        time.sleep(2)
         if procs:
-            # 兜底：按端口清理可能残留的进程
+            # 兜底：按端口强杀整棵进程树（含 uv 拉起的 uvicorn 孙进程）
             stop_servers(list({cfg["port"] for cfg in _SERVERS.values()}))
         print("已全部停止。")
 
