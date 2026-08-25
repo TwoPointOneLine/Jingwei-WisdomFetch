@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAG 导入服务</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    h1 { color: #2c3e50; }
+    #drop { border: 2px dashed #bbb; border-radius: 10px; padding: 30px; text-align: center; color: #888; }
+    #log { background: #f6f8fa; border-radius: 8px; padding: 12px; margin-top: 16px; font-size: 13px; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+    button { padding: 8px 16px; border: 0; border-radius: 6px; background: #4f46e5; color: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>掌柜智库 · 文档导入</h1>
+  <div id="drop">
+    <p>选择 PDF / Markdown 文件上传</p>
+    <input id="file" type="file" multiple accept=".pdf,.md,.markdown" />
+    <p><button onclick="upload()">上传并开始导入</button></p>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+    async function upload() {
+      const files = document.getElementById('file').files;
+      if (!files.length) return alert('请选择文件');
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      log('上传中...');
+      const res = await fetch('/upload', { method: 'POST', body: fd });
+      const json = await res.json();
+      log('返回: ' + JSON.stringify(json));
+      for (const tid of json.task_ids) poll(tid);
+    }
+
+    async function poll(taskId) {
+      const timer = setInterval(async () => {
+        const r = await fetch('/status/' + taskId);
+        const j = await r.json();
+        log(`[${taskId.slice(0,8)}] 状态=${j.status} 完成节点=${j.done_list.join(',')}`);
+        if (j.status === 'completed' || j.status === 'failed') clearInterval(timer);
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

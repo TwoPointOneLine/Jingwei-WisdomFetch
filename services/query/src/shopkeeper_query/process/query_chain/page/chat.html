@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAG 查询服务</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; }
+    h1 { color: #2c3e50; }
+    #box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; min-height: 220px; margin: 16px 0; white-space: pre-wrap; }
+    .row { display: flex; gap: 8px; }
+    input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+    button { padding: 10px 20px; border: 0; border-radius: 8px; background: #0ea5e9; color: #fff; cursor: pointer; }
+    .meta { font-size: 12px; color: #999; }
+  </style>
+</head>
+<body>
+  <h1>掌柜智库 · 知识问答</h1>
+  <div id="box">请输入问题开始对话...</div>
+  <div class="row">
+    <input id="q" placeholder="例如：RS-12 万用表怎么测电阻？" />
+    <button onclick="ask()">发送</button>
+  </div>
+  <p class="meta" id="meta">session: 未建立</p>
+
+  <script>
+    let sessionId = localStorage.getItem('rag_session') || (crypto.randomUUID());
+    localStorage.setItem('rag_session', sessionId);
+    document.getElementById('meta').textContent = 'session: ' + sessionId.slice(0, 8);
+
+    const box = document.getElementById('box');
+
+    async function ask() {
+      const q = document.getElementById('q').value.trim();
+      if (!q) return;
+      box.textContent += '\n\n你: ' + q + '\n助手: ';
+      document.getElementById('q').value = '';
+
+      // 提交任务
+      const res = await fetch('/chat/query', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, query: q, need_stream_output: true })
+      });
+      const json = await res.json();
+      const taskId = json.data.task_id;
+
+      // SSE 流监听（按 session 关联）
+      const es = new EventSource('/chat/stream/' + sessionId);
+      es.addEventListener('delta', e => { box.textContent += JSON.parse(e.data).text; box.scrollTop = box.scrollHeight; });
+      es.addEventListener('final', e => { box.textContent += '\n'; es.close(); });
+      es.addEventListener('error', e => { box.textContent += '\n[错误] ' + (JSON.parse(e.data).error || ''); es.close(); });
+      es.onerror = () => es.close();
+    }
+  </script>
+</body>
+</html>

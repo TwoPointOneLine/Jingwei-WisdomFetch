@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint (ruff + lock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.0"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 校验 uv.lock 一致性
+        run: uv lock --check
+      - name: ruff 检查 packages / services
+        run: uv run ruff check packages services
+
+  test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.0"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装全部 workspace 依赖
+        run: uv sync --all-packages --no-dev
+      - name: common 单测
+        run: uv run pytest packages/common/tests -q
+      - name: 服务单测（gateway/auth/user/knowledge/query）
+        run: uv run pytest services/gateway/tests services/auth/tests services/user/tests services/knowledge/tests services/query/tests -q
+
+  frontend:
+    name: Frontend (tsc + build + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 启用 corepack（pnpm）
+        run: corepack enable
+      - name: 安装依赖
+        run: pnpm --dir frontend install --frozen-lockfile
+      - name: oxlint
+        run: pnpm --dir frontend lint
+      - name: 类型检查 + 构建
+        run: pnpm --dir frontend build
+
+  package:
+    name: Build wheels
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.0"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 构建五服务 wheel/sdist
+        run: |
+          uv sync --all-packages --no-dev
+          uv build --package shopkeeper-common
+          for pkg in shopkeeper-gateway shopkeeper-auth shopkeeper-user shopkeeper-knowledge shopkeeper-query; do
+            uv build --package "$pkg"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: dist/

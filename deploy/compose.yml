@@ -1,0 +1,145 @@
+# ============================================================
+# 掌柜智库 (Shopkeeper Think Tank) 全栈编排（阶段5）
+# 基础设施（Mongo/Milvus/MinIO/etcd/Attu）见同目录 docker-compose.yml，
+# 本文件通过 include 一并管理，并定义五服务独立模块镜像。
+#
+# 一键部署： python scripts/deploy.py up
+# 按需启停（仅起某几个模块，依赖自动拉起）：
+#   docker compose -f deploy/compose.yml up -d query-server gateway-server
+# 全部停止： docker compose -f deploy/compose.yml down
+# 环境变量： 复制 deploy/.env.example 为 .env 后按需修改
+# ============================================================
+
+name: shopkeeper-think-tank
+
+include:
+  - ./docker-compose.yml
+
+services:
+  # ---------------------- 网关（统一入口 8080） ----------------------
+  gateway-server:
+    container_name: shopkeeper-think-tank-gateway
+    image: shopkeeper-gateway:0.1.0
+    build:
+      context: .
+      dockerfile: deploy/docker/gateway.Dockerfile
+    env_file: [../.env]
+    environment:
+      GATEWAY_APP_PORT: 8080
+      GATEWAY_AUTH_MODE: ${GATEWAY_AUTH_MODE:-optional}
+      GATEWAY_RATE_LIMIT: ${GATEWAY_RATE_LIMIT:-0}
+      # 网关本地校验 token 同样依赖共享 Mongo
+      MONGO_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-shopkeeper123}@mongo:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-enterprise_rag}
+      # 各后端独立 host（容器服务名），优先级高于 GATEWAY_BACKEND_HOST
+      GATEWAY_AUTH_HOST: auth-server
+      GATEWAY_USER_HOST: user-server
+      GATEWAY_IMPORT_HOST: knowledge-server
+      GATEWAY_QUERY_HOST: query-server
+      # 前端静态产物由网关托管（compose 挂载 dist）
+      GATEWAY_DIST_DIR: /app/frontend/dist
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend/dist:/app/frontend/dist:ro
+    depends_on:
+      auth-server: { condition: service_healthy }
+      user-server: { condition: service_healthy }
+      knowledge-server: { condition: service_healthy }
+      query-server: { condition: service_healthy }
+    networks:
+      - shopkeeper
+
+  # ---------------------- 认证服务（8083） ----------------------
+  auth-server:
+    container_name: shopkeeper-think-tank-auth
+    image: shopkeeper-auth:0.1.0
+    build:
+      context: .
+      dockerfile: deploy/docker/auth.Dockerfile
+    env_file: [../.env]
+    environment:
+      AUTH_APP_PORT: 8083
+      MONGO_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-shopkeeper123}@mongo:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-enterprise_rag}
+      AUTH_BOOTSTRAP_ADMIN: ${AUTH_BOOTSTRAP_ADMIN:-}
+    ports:
+      - "8083:8083"
+    depends_on:
+      mongo: { condition: service_healthy }
+    networks:
+      - shopkeeper
+
+  # ---------------------- 用户服务（8084） ----------------------
+  user-server:
+    container_name: shopkeeper-think-tank-user
+    image: shopkeeper-user:0.1.0
+    build:
+      context: .
+      dockerfile: deploy/docker/user.Dockerfile
+    env_file: [../.env]
+    environment:
+      USER_APP_PORT: 8084
+      MONGO_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-shopkeeper123}@mongo:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-enterprise_rag}
+    ports:
+      - "8084:8084"
+    depends_on:
+      mongo: { condition: service_healthy }
+    networks:
+      - shopkeeper
+
+  # ---------------------- 知识库导入服务（8081） ----------------------
+  knowledge-server:
+    container_name: shopkeeper-think-tank-knowledge
+    image: shopkeeper-knowledge:0.1.0
+    build:
+      context: .
+      dockerfile: deploy/docker/knowledge.Dockerfile
+    env_file: [../.env]
+    environment:
+      IMPORT_APP_PORT: 8081
+      MILVUS_URL: http://milvus:19530
+      MONGO_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-shopkeeper123}@mongo:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-enterprise_rag}
+      MINIO_ENDPOINT: object-storage:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-shopkeeper}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-shopkeeper123}
+      # 模型挂载到 /models 后按实际子目录覆盖（与 .env 中的宿主机路径无关）
+      BGE_M3_PATH: ${CONTAINER_BGE_M3_PATH:-/models/BAAI/bge-m3}
+      BGE_RERANKER_LARGE: ${CONTAINER_BGE_RERANKER_LARGE:-/models/BAAI/bge-reranker-v2-m3}
+    ports:
+      - "8081:8081"
+    volumes:
+      - ${BGE_MODELS_DIR:-D:/ai_models}:/models
+    depends_on:
+      milvus: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      object-storage: { condition: service_healthy }
+    networks:
+      - shopkeeper
+
+  # ---------------------- 智能问答服务（8082） ----------------------
+  query-server:
+    container_name: shopkeeper-think-tank-query
+    image: shopkeeper-query:0.1.0
+    build:
+      context: .
+      dockerfile: deploy/docker/query.Dockerfile
+    env_file: [../.env]
+    environment:
+      QUERY_APP_PORT: 8082
+      MILVUS_URL: http://milvus:19530
+      MONGO_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-shopkeeper123}@mongo:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-enterprise_rag}
+      BGE_M3_PATH: ${CONTAINER_BGE_M3_PATH:-/models/BAAI/bge-m3}
+      BGE_RERANKER_LARGE: ${CONTAINER_BGE_RERANKER_LARGE:-/models/BAAI/bge-reranker-v2-m3}
+    ports:
+      - "8082:8082"
+    volumes:
+      - ${BGE_MODELS_DIR:-D:/ai_models}:/models
+    depends_on:
+      milvus: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+    networks:
+      - shopkeeper

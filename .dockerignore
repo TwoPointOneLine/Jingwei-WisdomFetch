@@ -1,0 +1,32 @@
+# Git / 工具缓存
+.git
+.gitignore
+.codebuddy
+.idea
+.vscode
+*.log
+*.err
+
+# Python
+.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.ruff_cache
+dist
+*.egg-info
+
+# 前端（dist 通过 compose volume 挂载，无需进镜像上下文）
+frontend
+
+# 文档/测试/产物目录
+logs
+output
+test
+docs
+packages/common/docs
+
+# 脚本与编排文件（deploy 目录含 Dockerfile，必须保留）
+start.bat
+stop.bat

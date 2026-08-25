@@ -1,0 +1,46 @@
+name: CD
+
+# 打 tag（如 v0.1.0）时构建五服务独立镜像并推送 GHCR
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  images:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送五服务镜像
+        shell: bash
+        env:
+          IMAGE_NS: ghcr.io/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ver="${TAG#v}"
+          for svc in gateway auth user knowledge query; do
+            image="${IMAGE_NS}/shopkeeper-${svc}"
+            echo "==> build & push ${image}:${ver}"
+            docker build \
+              -f "deploy/docker/${svc}.Dockerfile" \
+              -t "${image}:${ver}" \
+              -t "${image}:latest" \
+              .
+            docker push "${image}:${ver}"
+            docker push "${image}:latest"
+          done
