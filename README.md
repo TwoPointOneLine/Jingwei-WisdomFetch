@@ -41,10 +41,13 @@ copy deploy\.env.example .env
 
 ## 一键启动（本地运行）
 
-提供一键脚本，自动检查基础设施连通性、并行拉起导入/查询两个服务并等待健康：
+提供一键脚本，自动检查基础设施（Milvus / MongoDB / MinIO）连通性、并行拉起**网关 + 认证 + 用户 + 知识 + 问答五个服务**并等待健康：
 
 ```bash
-# 启动（先确保基础设施已启动：docker compose -f deploy\docker-compose.yml up -d）
+# 先确保基础设施已启动（Docker）
+docker compose -f deploy\docker-compose.yml up -d
+
+# 启动全部服务
 run.bat
 # 或等价命令
 uv run python scripts/start_all.py
@@ -58,12 +61,13 @@ uv run python scripts/start_all.py --stop
 uv run python scripts/start_all.py --check
 ```
 
-启动成功后访问：
-- 导入服务：http://127.0.0.1:8081/html
-- 查询服务：http://127.0.0.1:8082/html
-- API 文档：http://127.0.0.1:8082/docs
+启动成功后，所有流量走**网关统一入口（8080）**：
+- 前端主界面：http://127.0.0.1:8080/
+- 网关 API 文档：http://127.0.0.1:8080/gateway/docs
+- 各后端服务文档：http://127.0.0.1:8083/docs（认证）、http://127.0.0.1:8084/docs（用户）、http://127.0.0.1:8081/html（知识导入）、http://127.0.0.1:8082/html（问答）
+- 业务 API 前缀：`/api/auth/*`、`/api/user/*`、`/api/knowledge/*`、`/api/import/*`、`/api/query/*`
 
-> 端口读取自 `.env` 的 `IMPORT_APP_PORT` / `QUERY_APP_PORT`（默认 8081 / 8082）。脚本通过子进程拉起 uvicorn，日志写入 `logs/import-server.log` 与 `logs/query-server.log`。
+> 端口读取自 `.env` 的 `GATEWAY_APP_PORT / AUTH_APP_PORT / USER_APP_PORT / IMPORT_APP_PORT / QUERY_APP_PORT`（默认 8080 / 8083 / 8084 / 8081 / 8082）。脚本通过子进程拉起 uvicorn，日志写入 `logs/*.log`。
 
 ## React 前端
 
@@ -77,13 +81,29 @@ pnpm dev            # 开发模式（http://localhost:5173，Vite 代理转发�
 pnpm build          # 生产构建（产物在 frontend/dist）
 ```
 
-**部署方式**：`pnpm build` 后，query 服务（8082）根路径 `/` 直接提供构建产物，浏览器访问 `http://127.0.0.1:8082/` 即为主界面。
+**部署方式**：`pnpm build` 后，构建产物 `frontend/dist` 由**网关服务（8080）**挂载托管，浏览器访问 `http://127.0.0.1:8080/` 即为主界面（Docker 部署时由网关容器 volume 挂载，路径 `GATEWAY_DIST_DIR=/app/frontend/dist`）。
 
-> 环境差异：`import.meta.env.PROD` 为真（生产构建）时，前端用绝对 URL 跨域调用两个后端（CORS 已开放 `*`）；开发模式走 `/api/import`、`/api/query` 由 Vite 代理转发。
+> 环境差异：生产构建时前端统一请求网关 `http://<host>:8080/api/*`（路径前缀见 `frontend/src/api.ts`）；开发模式走 Vite 代理将 `/api/*` 转发到网关 8080。所有后端 API 均需经网关统一入口，跨域（CORS）由网关统一开放。
 
 ## 目录结构
 
-见 `docs/03【掌柜智库】环境准备.md` 的「项目结构设计」。
+```
+shopkeeper-think-tank/
+├── packages/common/            # 公共底座 shopkeeper_common（配置/鉴权/异常/响应）
+├── services/                   # 五个业务服务（独立模块）
+│   ├── gateway/                #   shopkeeper_gateway   网关统一入口（8080）
+│   ├── auth/                   #   shopkeeper_auth      认证（8083）
+│   ├── user/                   #   shopkeeper_user      用户（8084）
+│   ├── knowledge/              #   shopkeeper_knowledge 知识导入（8081）
+│   └── query/                  #   shopkeeper_query     问答（8082）
+├── frontend/                   # Vite + React 19 + TS 前端（pnpm）
+├── deploy/                     # Dockerfile / compose.yml / .env.example
+├── scripts/                    # deploy.py / deploy.bat / start_all.py
+├── test/                       # 根级 e2e（test_09 / test_10）
+├── .github/workflows/          # ci.yml / cd.yml
+├── pyproject.toml              # uv workspace 根配置
+└── run.bat                     # 一键启动/停止（合并原 start/stop）
+```
 
 ## Docker 部署（阶段 5：全模块独立镜像 + 按需启停）
 
