@@ -1,6 +1,9 @@
 import type { ChatSession } from '../types'
 import SessionList from './SessionList'
 import SidebarFooter, { type ThemeMode } from './SidebarFooter'
+import logoIcon from '../assets/logo-icon.png'
+import logoDark from '../assets/logo-dark.png'
+import logoLight from '../assets/logo-light.png'
 
 interface SidebarProps {
   collapsed: boolean
@@ -9,6 +12,7 @@ interface SidebarProps {
   activeView: 'chat' | 'import'
   theme: ThemeMode
   isLoggedIn: boolean
+  isAdmin: boolean
   username: string
   onToggle: () => void
   onNewChat: () => void
@@ -28,6 +32,7 @@ export default function Sidebar({
   activeView,
   theme,
   isLoggedIn,
+  isAdmin,
   username,
   onToggle,
   onNewChat,
@@ -43,10 +48,16 @@ export default function Sidebar({
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       {/* 顶部：折叠按钮 + 标题 */}
       <div className="sidebar-head">
-        {!collapsed && (
+        {!collapsed ? (
+          <div className="brand-horizontal" title="精卫 WisdomFetch">
+            <img className="brand-h-dark" src={logoDark} alt="精卫 WisdomFetch" />
+            <img className="brand-h-light" src={logoLight} alt="精卫 WisdomFetch" />
+          </div>
+        ) : (
           <div className="brand">
-            <span className="brand-logo">智</span>
-            <span className="brand-name">掌柜智库</span>
+            <span className="brand-logo">
+              <img src={logoIcon} alt="精卫" />
+            </span>
           </div>
         )}
         <button className="icon-btn" onClick={onToggle} title={collapsed ? '展开菜单' : '折叠菜单'}>
@@ -81,6 +92,7 @@ export default function Sidebar({
             activeView={activeView}
             theme={theme}
             isLoggedIn={isLoggedIn}
+            isAdmin={isAdmin}
             username={username}
             onSwitchView={onSwitchView}
             onThemeChange={onThemeChange}

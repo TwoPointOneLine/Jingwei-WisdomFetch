@@ -5,14 +5,14 @@ import Sidebar from './components/Sidebar'
 import AuthPanel from './components/AuthPanel'
 import ChatHeader from './components/ChatHeader'
 import type { ThemeMode } from './components/SidebarFooter'
-import { authLogout, authMe, genUUID } from './api'
+import { authLogout, authMe, claimGuestSessions, genUUID, listSessions } from './api'
 import type { ChatMessage, ChatSession } from './types'
 import './App.css'
 
-const SESSIONS_KEY = 'shopkeeper_rag_sessions'
-const ACTIVE_KEY = 'shopkeeper_rag_active'
-const THEME_KEY = 'shopkeeper_rag_theme'
-const AUTH_KEY = 'shopkeeper_rag_user'
+const SESSIONS_KEY = 'jingwei_rag_sessions'
+const ACTIVE_KEY = 'jingwei_rag_active'
+const THEME_KEY = 'jingwei_rag_theme'
+const AUTH_KEY = 'jingwei_rag_user'
 const MAX_SESSIONS = 50
 
 type View = 'chat' | 'import'
@@ -20,6 +20,7 @@ type View = 'chat' | 'import'
 interface AuthUser {
   username: string
   token: string
+  role?: string
 }
 
 function loadTheme(): ThemeMode {
@@ -76,6 +77,12 @@ export default function App() {
       authMe(user.token)
         .then((data) => {
           if (data.username !== user.username) handleLogout()
+          // FR-AUTH-02：同步角色
+          else if (data.role && data.role !== user.role) {
+            const updated = { ...user, role: data.role }
+            setUser(updated)
+            localStorage.setItem(AUTH_KEY, JSON.stringify(updated))
+          }
         })
         .catch(() => handleLogout())
     }
@@ -177,6 +184,40 @@ export default function App() {
     setShowAuth(false)
     // 登录后进入对话页
     setView('chat')
+    // FR-AUTH-02：登录后立即取角色，用于 admin 视图判定
+    authMe(token)
+      .then((data) => {
+        if (data.role) {
+          const updated = { ...nextUser, role: data.role }
+          setUser(updated)
+          localStorage.setItem(AUTH_KEY, JSON.stringify(updated))
+        }
+      })
+      .catch(() => {/* 取角色失败不阻断登录 */})
+    // 登录即归并：先把本浏览器（anon_id）下遗留的 guest 会话归并到当前用户，
+    // 再拉取服务端「当前用户」会话刷新侧栏（保留历史、切换账号不丢未登录会话）。
+    claimGuestSessions()
+      .catch(() => {/* 归并失败不阻断，仍继续拉列表 */})
+      .finally(() => {
+        listSessions()
+          .then((serverSessions) => {
+            if (!serverSessions.length) return
+            setSessions((prev) => {
+              const byId = new Map(prev.map((s) => [s.id, s]))
+              for (const ss of serverSessions) {
+                const existing = byId.get(ss.session_id)
+                byId.set(ss.session_id, {
+                  id: ss.session_id,
+                  title: ss.title || existing?.title || '',
+                  messages: existing?.messages || [],
+                  updatedAt: existing?.updatedAt || Date.parse(ss.updated_at) || Date.now(),
+                })
+              }
+              return Array.from(byId.values()).slice(0, MAX_SESSIONS)
+            })
+          })
+          .catch(() => {/* 服务端拉取失败不阻断：保留本地会话 */})
+      })
   }
 
   /** 退出登录 */
@@ -188,7 +229,7 @@ export default function App() {
     localStorage.removeItem(AUTH_KEY)
   }
 
-  /** 点击上传知识库：需先登录 */
+  /** 点击上传知识库：需先登录（普通用户也可管理自己的知识库） */
   const handleUploadClick = () => {
     if (!user) {
       setShowAuth(true)
@@ -206,6 +247,7 @@ export default function App() {
         activeView={view}
         theme={theme}
         isLoggedIn={!!user}
+        isAdmin={user?.role === 'admin'}
         username={user?.username ?? ''}
         onToggle={() => setCollapsed((c) => !c)}
         onNewChat={newChat}
@@ -248,7 +290,7 @@ export default function App() {
               onUpload={() => setView('import')}
             />
             <div className="import-wrap">
-              <ImportPanel />
+              <ImportPanel isAdmin={user?.role === 'admin'} username={user?.username ?? ''} />
             </div>
           </>
         )}

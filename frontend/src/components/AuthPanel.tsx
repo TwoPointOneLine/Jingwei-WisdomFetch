@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { authLogin, authRegister } from '../api'
+import logoIcon from '../assets/logo-icon.png'
 
 type AuthMode = 'login' | 'register'
 
@@ -57,8 +58,10 @@ export default function AuthPanel({ onLogin, onCancel }: AuthPanelProps) {
 
   return (
     <div className="auth-card">
-      <div className="auth-logo">智</div>
-      <h2 className="auth-title">掌柜智库</h2>
+      <div className="auth-logo">
+        <img src={logoIcon} alt="精卫" />
+      </div>
+      <h2 className="auth-title">精卫</h2>
       <p className="auth-sub">企业级私有知识库 · RAG 智能问答</p>
 
       <div className="auth-tabs">

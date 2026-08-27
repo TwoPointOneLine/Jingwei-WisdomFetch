@@ -1,11 +1,11 @@
 # ============================================================
-# 掌柜智库 (Shopkeeper Think Tank) 基础设施编排
+# 精卫 (Jingwei WisdomFetch) 基础设施编排
 # 启动： docker compose -f deploy/docker-compose.yml up -d
 # 停止： docker compose -f deploy/docker-compose.yml down
 # 查看： docker compose -f deploy/docker-compose.yml ps
 # ============================================================
 
-name: shopkeeper-think-tank
+name: jingwei-wisdom-fetch
 
 networks:
   shopkeeper:
@@ -20,7 +20,7 @@ volumes:
 services:
   # ---------------------- etcd（Milvus 依赖） ----------------------
   etcd:
-    container_name: shopkeeper-think-tank-etcd
+    container_name: jingwei-wisdom-fetch-etcd
     image: quay.io/coreos/etcd:v3.5.14
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
@@ -41,7 +41,7 @@ services:
   # ---------------------- MinIO（Milvus 内部对象存储） ----------------------
   # 注意端口与下方「外部对象存储 MinIO」错开，避免冲突
   milvus-minio:
-    container_name: shopkeeper-think-tank-milvus-minio
+    container_name: jingwei-wisdom-fetch-milvus-minio
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z
     environment:
       MINIO_ACCESS_KEY: minioadmin
@@ -59,7 +59,7 @@ services:
 
   # ---------------------- Milvus standalone ----------------------
   milvus:
-    container_name: shopkeeper-think-tank-milvus
+    container_name: jingwei-wisdom-fetch-milvus
     image: milvusdb/milvus:v2.4.13
     command: ["milvus", "run", "standalone"]
     environment:
@@ -84,7 +84,7 @@ services:
 
   # ---------------------- MongoDB（聊天历史 / 任务状态持久化） ----------------------
   mongo:
-    container_name: shopkeeper-think-tank-mongo
+    container_name: jingwei-wisdom-fetch-mongo
     image: mongo:7.0
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-root}
@@ -105,7 +105,7 @@ services:
   # ---------------------- MinIO（外部对象存储：PDF/Markdown 原文） ----------------------
   # 与 Milvus 内部 MinIO 端口错开（9000 API / 9001 Console）
   object-storage:
-    container_name: shopkeeper-think-tank-object-storage
+    container_name: jingwei-wisdom-fetch-object-storage
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-shopkeeper}
@@ -126,12 +126,13 @@ services:
 
   # ---------------------- Attu（Milvus Web 管理台，可选） ----------------------
   attu:
-    container_name: shopkeeper-think-tank-attu
+    container_name: jingwei-wisdom-fetch-attu
     image: zilliz/attu:v2.4.3
     environment:
       MILVUS_URL: milvus:19530
     ports:
-      - "8000:3000"
+      # 宿主机 8000 常被 Docker Desktop/WSL2 自身占用，改 8090 避免端口冲突导致 compose 失败
+      - "8090:3000"
     depends_on:
       - milvus
     networks:

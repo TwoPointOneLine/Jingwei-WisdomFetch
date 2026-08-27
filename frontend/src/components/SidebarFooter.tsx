@@ -6,6 +6,7 @@ interface SidebarFooterProps {
   activeView: 'chat' | 'import'
   theme: ThemeMode
   isLoggedIn: boolean
+  isAdmin: boolean
   username: string
   onSwitchView: (view: 'chat' | 'import') => void
   onThemeChange: (theme: ThemeMode) => void
@@ -22,6 +23,7 @@ export default function SidebarFooter({
   activeView,
   theme,
   isLoggedIn,
+  isAdmin,
   username,
   onSwitchView,
   onThemeChange,
@@ -32,11 +34,17 @@ export default function SidebarFooter({
 
   return (
     <div className="sidebar-foot">
-      {/* 知识库管理入口（仅登录后显示） */}
+      {/* 知识库管理入口：登录 + 管理员（FR-AUTH-02），其余角色点击提示无权限 */}
       {isLoggedIn && (
         <button
           className={`menu-item${activeView === 'import' ? ' active' : ''}`}
-          onClick={() => onSwitchView('import')}
+          onClick={() => {
+            if (!isAdmin) {
+              alert('仅管理员可访问知识库管理')
+              return
+            }
+            onSwitchView('import')
+          }}
         >
           <span className="menu-item-icon">📚</span>
           <span className="menu-item-label">知识库管理</span>

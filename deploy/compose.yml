@@ -1,5 +1,5 @@
 # ============================================================
-# 掌柜智库 (Shopkeeper Think Tank) 全栈编排（阶段5）
+# 精卫 (Jingwei WisdomFetch) 全栈编排（阶段5）
 # 基础设施（Mongo/Milvus/MinIO/etcd/Attu）见同目录 docker-compose.yml，
 # 本文件通过 include 一并管理，并定义五服务独立模块镜像。
 #
@@ -10,7 +10,7 @@
 # 环境变量： 复制 deploy/.env.example 为 .env 后按需修改
 # ============================================================
 
-name: shopkeeper-think-tank
+name: jingwei-wisdom-fetch
 
 include:
   - ./docker-compose.yml
@@ -18,11 +18,11 @@ include:
 services:
   # ---------------------- 网关（统一入口 8080） ----------------------
   gateway-server:
-    container_name: shopkeeper-think-tank-gateway
-    image: shopkeeper-gateway:0.1.0
+    container_name: jingwei-wisdom-fetch-gateway
+    image: jingwei-gateway:0.1.0
     build:
-      context: .
-      dockerfile: deploy/docker/gateway.Dockerfile
+      context: ../backend
+      dockerfile: deploy/gateway.Dockerfile
     env_file: [../.env]
     environment:
       GATEWAY_APP_PORT: 8080
@@ -52,11 +52,11 @@ services:
 
   # ---------------------- 认证服务（8083） ----------------------
   auth-server:
-    container_name: shopkeeper-think-tank-auth
-    image: shopkeeper-auth:0.1.0
+    container_name: jingwei-wisdom-fetch-auth
+    image: jingwei-auth:0.1.0
     build:
-      context: .
-      dockerfile: deploy/docker/auth.Dockerfile
+      context: ../backend
+      dockerfile: deploy/auth.Dockerfile
     env_file: [../.env]
     environment:
       AUTH_APP_PORT: 8083
@@ -72,11 +72,11 @@ services:
 
   # ---------------------- 用户服务（8084） ----------------------
   user-server:
-    container_name: shopkeeper-think-tank-user
-    image: shopkeeper-user:0.1.0
+    container_name: jingwei-wisdom-fetch-user
+    image: jingwei-user:0.1.0
     build:
-      context: .
-      dockerfile: deploy/docker/user.Dockerfile
+      context: ../backend
+      dockerfile: deploy/user.Dockerfile
     env_file: [../.env]
     environment:
       USER_APP_PORT: 8084
@@ -91,11 +91,11 @@ services:
 
   # ---------------------- 知识库导入服务（8081） ----------------------
   knowledge-server:
-    container_name: shopkeeper-think-tank-knowledge
-    image: shopkeeper-knowledge:0.1.0
+    container_name: jingwei-wisdom-fetch-knowledge
+    image: jingwei-knowledge:0.1.0
     build:
-      context: .
-      dockerfile: deploy/docker/knowledge.Dockerfile
+      context: ../backend
+      dockerfile: deploy/knowledge.Dockerfile
     env_file: [../.env]
     environment:
       IMPORT_APP_PORT: 8081
@@ -121,11 +121,11 @@ services:
 
   # ---------------------- 智能问答服务（8082） ----------------------
   query-server:
-    container_name: shopkeeper-think-tank-query
-    image: shopkeeper-query:0.1.0
+    container_name: jingwei-wisdom-fetch-query
+    image: jingwei-query:0.1.0
     build:
-      context: .
-      dockerfile: deploy/docker/query.Dockerfile
+      context: ../backend
+      dockerfile: deploy/query.Dockerfile
     env_file: [../.env]
     environment:
       QUERY_APP_PORT: 8082

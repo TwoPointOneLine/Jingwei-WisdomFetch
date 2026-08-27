@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           ver="${TAG#v}"
           for svc in gateway auth user knowledge query; do
-            image="${IMAGE_NS}/shopkeeper-${svc}"
+            image="${IMAGE_NS}/jingwei-${svc}"
             echo "==> build & push ${image}:${ver}"
             docker build \
               -f "deploy/docker/${svc}.Dockerfile" \

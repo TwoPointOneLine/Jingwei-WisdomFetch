@@ -72,8 +72,8 @@ jobs:
       - name: 构建五服务 wheel/sdist
         run: |
           uv sync --all-packages --no-dev
-          uv build --package shopkeeper-common
-          for pkg in shopkeeper-gateway shopkeeper-auth shopkeeper-user shopkeeper-knowledge shopkeeper-query; do
+          uv build --package jingwei-common
+          for pkg in jingwei-gateway jingwei-auth jingwei-user jingwei-knowledge jingwei-query; do
             uv build --package "$pkg"
           done
       - uses: actions/upload-artifact@v4

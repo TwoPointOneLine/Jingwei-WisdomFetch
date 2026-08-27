@@ -1,90 +1,27 @@
+# ============================================================
+# 精卫 (Jingwei WisdomFetch) —— 仓库根 pyproject.toml
+# ------------------------------------------------------------
+# 本文件为「仓库级（monorepo 根）」标记，仅承载项目元信息，
+# 不参与 Python 依赖/构建管理。
+#
+# - Python 工程的 uv workspace 根在 backend/pyproject.toml
+#   （其 [tool.uv.workspace] 成员为 backend/packages/*、backend/services/*）。
+# - 为避免与 backend 的 uv workspace 冲突，本文件【不】声明
+#   [tool.uv.workspace]、[build-system] 或任何依赖，仅作根标识。
+#
+# 子工程入口：
+#   - 后端（uv workspace）：backend/
+#   - 前端（pnpm）：        frontend/
+#   - 部署编排：            deploy/
+# ============================================================
+
 [project]
-name = "shopkeeper-think-tank"
+name = "jingwei-wisdomfetch"
 version = "0.1.0"
-description = "掌柜智库 - 企业级私有知识库智能问答系统 (RAG)"
+description = "精卫 · 金融智能知识库（Jingwei WisdomFetch, JWF）—— 企业级私有金融知识库智能问答系统（RAG）。仓库根：含 backend(Python) + frontend(React) + deploy(Docker)。"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
-    "langgraph>=0.2.0",
-    "langchain>=0.3.0",
-    "langchain-community>=0.3.0",
-    "langchain-openai>=0.2.0",
-    "pymilvus>=2.4.0",
-    "pymongo>=4.8.0",
-    "minio>=7.2.0",
-    "python-dotenv>=1.0.0",
-    "loguru>=0.7.0",
-    "requests>=2.31.0",
-    "sse-starlette>=2.1.0",
-    # 本地向量模型 BGE-M3
-    "sentence-transformers>=3.0.0",
-    # 本地重排序模型 BGE-Reranker（官方 FlagEmbedding）
-    "FlagEmbedding>=1.3.0",
-    # MCP 客户端（联网搜索：openai-agents 提供的 MCPServerStreamableHttp）
-    "openai-agents>=0.4.2",
-    # MCP 协议底层库
-    "mcp>=1.2.0",
-    # BM25 关键词召回（向量召回回退/混合）
-    "rank-bm25>=0.2.2",
-    # 公共模块（多模块改造共享底座，来源见 [tool.uv.sources]）
-    "shopkeeper-common",
-    # 服务模块（多模块改造：知识库导入 / 智能问答 / 认证 / 用户 / 网关）
-    "shopkeeper-knowledge",
-    "shopkeeper-query",
-    "shopkeeper-auth",
-    "shopkeeper-user",
-    "shopkeeper-gateway",
-]
+dependencies = []
 
-[tool.uv.sources]
-shopkeeper-common = { workspace = true }
-shopkeeper-knowledge = { workspace = true }
-shopkeeper-query = { workspace = true }
-shopkeeper-auth = { workspace = true }
-shopkeeper-user = { workspace = true }
-shopkeeper-gateway = { workspace = true }
-
-# 命令行入口（一键启动）
-[project.scripts]
-shopkeeper-start = "scripts.start_all:main"
-
-# uv workspace：多模块工程（公共模块 + 服务模块，随多模块改造逐步加入）
-[tool.uv.workspace]
-members = [
-    "packages/common",
-    "services/knowledge",
-    "services/query",
-    "services/auth",
-    "services/user",
-    "services/gateway",
-]
-
-[dependency-groups]
-# 开发 / 测试依赖（uv sync 默认不安装，需用 uv sync --group dev）
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "httpx>=0.27.0",
-    "ruff>=0.6.0",
-]
-
-# 项目下配置环境变量(更推荐)：使用清华镜像源加速依赖下载
-[[tool.uv.index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["test"]
-pythonpath = ["."]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-ignore = ["E501"]
+# 明确不在此声明 uv workspace，保持 backend/ 为唯一的 Python 工程根。
+# 若后续需要根级统一脚本，可在此添加 [project.scripts]，但勿加 [tool.uv.workspace]。

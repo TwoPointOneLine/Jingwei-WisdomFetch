@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { fetchTaskResult, openSSE, submitQuery } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { fetchTaskResult, getAnonId, openSSE, submitFeedback, submitQuery } from '../api'
 import type { ChatMessage, ChatSession } from '../types'
 import ChatInput from './ChatInput'
 
@@ -41,6 +41,11 @@ export default function ChatPanel({
   const patchLast = (fn: (m: ChatMessage) => ChatMessage) => {
     const cur = messagesRef.current
     commitMessages(cur.map((m, i) => (i === cur.length - 1 ? fn(m) : m)))
+  }
+
+  const patchByIndex = (idx: number, fn: (m: ChatMessage) => ChatMessage) => {
+    const cur = messagesRef.current
+    commitMessages(cur.map((m, i) => (i === idx ? fn(m) : m)))
   }
 
   const ask = async (q: string, model: string) => {
@@ -87,9 +92,10 @@ export default function ChatPanel({
       stopTypewriter()
       try {
         const r = await fetchTaskResult(taskId)
-        const answer = (r as { llm_output?: string }).llm_output
+        const answer = (r as { llm_output?: string; citations?: import('../types').Citation[] }).llm_output
+        const citations = (r as { citations?: import('../types').Citation[] }).citations
         if (answer) {
-          patchLast((m) => ({ ...m, content: answer, streaming: false }))
+          patchLast((m) => ({ ...m, content: answer, citations, streaming: false }))
         }
       } catch (e) {
         // ignore
@@ -114,13 +120,14 @@ export default function ChatPanel({
           // 入缓冲，由打字机定时刷帧
           pendingRef.push(text)
         },
-        onFinal: (answer) => {
+        onFinal: (answer, citations) => {
           if (timeoutTriggered) return
           window.clearTimeout(timeoutId)
           stopTypewriter()
           patchLast((m) => ({
             ...m,
             content: answer || m.content,
+            citations,
             streaming: false,
           }))
           onSendingChange(false)
@@ -169,7 +176,7 @@ export default function ChatPanel({
         {session.messages.length === 0 && (
           <div className="welcome">
             <div className="welcome-icon">📚</div>
-            <div className="welcome-title">你好！我是掌柜智库知识助手</div>
+            <div className="welcome-title">你好！我是精卫知识助手</div>
             <div className="hint">例如：RS-12 万用表怎么测电阻？</div>
           </div>
         )}
@@ -180,15 +187,23 @@ export default function ChatPanel({
               {m.content}
               {m.streaming && <span className="cursor" />}
             </div>
-            {m.sources && m.sources.length > 0 && (
-              <div className="source-box">
-                <div className="source-title">参考来源</div>
-                {m.sources.map((s, j) => (
-                  <div className="source-item" key={j}>
-                    {s.title || s.url || s.chunk_id || (s.content ? s.content.slice(0, 60) : '')}
-                  </div>
-                ))}
-              </div>
+
+            {/* FR-CITE-02：结构化来源引用（可信标记 / 可展开）。优先 citations，兼容旧 sources */}
+            {m.role === 'assistant' && (m.citations?.length || m.sources?.length) ? (
+              <CitationList citations={m.citations} legacySources={m.sources} />
+            ) : null}
+
+            {/* FR-COMP-05：对助手回答提供反馈（已反馈后禁用） */}
+            {m.role === 'assistant' && !m.streaming && (
+              <FeedbackBar
+                sessionId={session.id}
+                messageId={String(i)}
+                username={username}
+                given={!!m.feedbackGiven}
+                onGiven={() =>
+                  patchByIndex(i, (mm) => ({ ...mm, feedbackGiven: true }))
+                }
+              />
             )}
           </div>
         ))}
@@ -196,6 +211,130 @@ export default function ChatPanel({
 
       {/* 消息输入区（独立组件：文件上传 + 模型选择 + 文本输入） */}
       <ChatInput sending={sending} onSend={ask} />
+    </div>
+  )
+}
+
+/** FR-CITE-02：结构化来源引用展示（可信标记 / 可展开） */
+function CitationList({
+  citations,
+  legacySources,
+}: {
+  citations?: import('../types').Citation[]
+  legacySources?: Array<{ title?: string; url?: string; chunk_id?: string; content?: string }>
+}) {
+  const [open, setOpen] = useState(false)
+  if (citations && citations.length) {
+    return (
+      <div className="source-box">
+        <div className="source-title" onClick={() => setOpen((o) => !o)}>
+          参考来源（{citations.length}）{open ? '▲' : '▼'}
+        </div>
+        {open &&
+          citations.map((c) => (
+            <div className={`source-item${c.external ? ' external' : ''}`} key={c.index}>
+              <span className="src-idx">{c.index}.</span>
+              <span className="src-title">{c.title || c.product_name || c.source_file || '未知来源'}</span>
+              {c.external && <span className="tag tag-external">外部</span>}
+              {c.risk_level && c.risk_level !== '未提及' && (
+                <span className="tag tag-risk">风险 {c.risk_level}</span>
+              )}
+              {c.content_type && <span className="tag">{c.content_type}</span>}
+              <div className="src-meta">
+                {c.product_code && <span>代码 {c.product_code}</span>}
+                {c.publish_date && <span>发布 {c.publish_date}</span>}
+                {c.source_file && <span>文件 {c.source_file}</span>}
+              </div>
+            </div>
+          ))}
+      </div>
+    )
+  }
+  // 兼容旧 sources
+  if (legacySources && legacySources.length) {
+    return (
+      <div className="source-box">
+        <div className="source-title">参考来源（{legacySources.length}）</div>
+        {legacySources.map((s, j) => (
+          <div className="source-item" key={j}>
+            {s.title || s.url || s.chunk_id || (s.content ? s.content.slice(0, 60) : '')}
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
+
+/** FR-COMP-05：对助手回答的反馈（点赞 / 点踩 / 纠错） */
+function FeedbackBar({
+  sessionId,
+  messageId,
+  username,
+  given,
+  onGiven,
+}: {
+  sessionId: string
+  messageId: string
+  username: string
+  given: boolean
+  onGiven: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [err, setErr] = useState('')
+
+  const send = async (rating: number, type: string) => {
+    setBusy(true)
+    setErr('')
+    try {
+      await submitFeedback({
+        session_id: sessionId,
+        message_id: messageId,
+        rating,
+        feedback_type: type,
+        content: type === 'correction' ? text : undefined,
+        username: username || undefined,
+        anon_id: !username ? getAnonId() : undefined,
+      })
+      onGiven()
+      setOpen(false)
+      setText('')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '反馈失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (given) {
+    return <div className="feedback-bar done">已收到反馈，感谢</div>
+  }
+  return (
+    <div className="feedback-bar">
+      <button className="fb-btn" disabled={busy} onClick={() => send(1, 'like')}>
+        👍 有用
+      </button>
+      <button className="fb-btn" disabled={busy} onClick={() => send(-1, 'dislike')}>
+        👎 没用
+      </button>
+      <button className="fb-btn" disabled={busy} onClick={() => setOpen((o) => !o)}>
+        ✏️ 纠错
+      </button>
+      {open && (
+        <div className="fb-correction">
+          <textarea
+            placeholder="请描述问题或补充正确信息（可选）"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button className="btn primary" disabled={busy} onClick={() => send(0, 'correction')}>
+            提交纠错
+          </button>
+        </div>
+      )}
+      {err && <div className="fb-err">{err}</div>}
     </div>
   )
 }

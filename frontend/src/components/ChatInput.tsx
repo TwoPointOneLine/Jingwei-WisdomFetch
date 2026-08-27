@@ -93,7 +93,7 @@ export default function ChatInput({ sending, onSend }: ChatInputProps) {
               handleSend()
             }
           }}
-          placeholder="和掌柜智库说点什么..."
+          placeholder="和精卫说点什么..."
           disabled={sending}
           rows={1}
         />
