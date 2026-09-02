@@ -7,7 +7,9 @@ from jingwei_knowledge.process.import_chain.state import ImportGraphState
 
 @node_log("node_entry")
 def node_entry(state: ImportGraphState) -> ImportGraphState:
-    add_running_task(state["task_id"], "node_entry")
+    task_id = state["task_id"]
+    add_running_task(task_id, "node_entry")
     state = resolve_input_file(state)
-    add_done_task(state["task_id"], "node_entry")
+    state["task_id"] = task_id  # service 返回值不含 task_id，回填保证状态追踪可用
+    add_done_task(task_id, "node_entry")
     return state

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import ChatPanel from './components/ChatPanel'
-import ImportPanel from './components/ImportPanel'
-import Sidebar from './components/Sidebar'
 import AuthPanel from './components/AuthPanel'
-import ChatHeader from './components/ChatHeader'
-import type { ThemeMode } from './components/SidebarFooter'
-import { authLogout, authMe, claimGuestSessions, genUUID, listSessions } from './api'
+import ChatPage from './pages/Chat/ChatPage'
+import KnowledgePage from './pages/Knowledge/KnowledgePage'
+import type { ThemeMode } from './pages/Chat/SidebarFooter'
+import { authLogout, authMe, claimGuestSessions, deleteSessionApi, genUUID, listSessions } from './api'
 import type { ChatMessage, ChatSession } from './types'
 import './App.css'
 
@@ -17,10 +15,19 @@ const MAX_SESSIONS = 50
 
 type View = 'chat' | 'import'
 
+/** 视图 ↔ 地址栏 hash 映射：强制刷新 / 前进后退都停留在当前页面 */
+const HASH_BY_VIEW: Record<View, string> = { chat: '#/', import: '#/knowledge' }
+
 interface AuthUser {
   username: string
   token: string
   role?: string
+}
+
+/** 从地址栏 hash 解析当前视图（#/knowledge、#/import 均指向知识库页） */
+function viewFromHash(): View {
+  const raw = window.location.hash.replace(/^#\/?/, '').trim().toLowerCase()
+  return raw === 'knowledge' || raw === 'import' ? 'import' : 'chat'
 }
 
 function loadTheme(): ThemeMode {
@@ -63,13 +70,15 @@ function loadActive(): string | null {
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
-  const [view, setView] = useState<View>('chat')
   const [sessions, setSessions] = useState<ChatSession[]>(loadSessions)
   const [activeId, setActiveId] = useState<string | null>(loadActive)
   const [theme, setTheme] = useState<ThemeMode>(loadTheme)
   const [user, setUser] = useState<AuthUser | null>(loadUser)
+  const [view, setView] = useState<View>(() => (user ? viewFromHash() : 'chat'))
   const [showAuth, setShowAuth] = useState(false)
   const [sending, setSending] = useState(false)
+  // 未登录时点击「知识库」：挂起目标视图，登录成功后直接进入
+  const [pendingImport, setPendingImport] = useState(false)
 
   // 登录后校验 token 是否仍有效
   useEffect(() => {
@@ -100,6 +109,40 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
+  /** 切换视图并同步地址栏：非 replace 时会写入历史，浏览器前进/后退可用 */
+  const applyView = useCallback((next: View, replace = false) => {
+    setView(next)
+    const hash = HASH_BY_VIEW[next]
+    if (window.location.hash === hash) return
+    const url = `${window.location.pathname}${window.location.search}${hash}`
+    if (replace) window.history.replaceState(null, '', url)
+    else window.location.hash = hash
+  }, [])
+
+  // 地址栏变化（前进/后退、手动改 hash）→ 同步视图
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = viewFromHash()
+      // 知识库页需登录：未登录则退回对话页并弹出登录
+      if (next === 'import' && !user) {
+        applyView('chat', true)
+        setShowAuth(true)
+        return
+      }
+      setView(next)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [user, applyView])
+
+  // 首次挂载：未登录时地址栏不允许停留在知识库页（避免刷新后地址与界面不一致）
+  useEffect(() => {
+    if (!user && viewFromHash() === 'import') {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 找到当前会话
   const activeSession = sessions.find((s) => s.id === activeId) ?? null
 
@@ -121,7 +164,7 @@ export default function App() {
     const session: ChatSession = { id, title: '', messages: [], updatedAt: Date.now() }
     setSessions((prev) => [session, ...prev].slice(0, MAX_SESSIONS))
     setActiveId(id)
-    setView('chat')
+    applyView('chat')
     setSending(false)
     localStorage.setItem(ACTIVE_KEY, id)
   }
@@ -141,7 +184,7 @@ export default function App() {
 
   const selectSession = (id: string) => {
     setActiveId(id)
-    setView('chat')
+    applyView('chat')
     setSending(false)
     localStorage.setItem(ACTIVE_KEY, id)
   }
@@ -151,20 +194,34 @@ export default function App() {
     updateSession(id, (s) => ({ ...s, title: newTitle, updatedAt: Date.now() }))
   }
 
-  /** 删除会话 */
-  const deleteSession = (id: string) => {
-    setSessions((prev) => {
-      const next = prev.filter((s) => s.id !== id)
-      // 若删除的是当前会话，回退到剩余第一条（若无则自动新建）
-      if (activeId === id) {
-        const fallbackId = next[0]?.id ?? null
-        setActiveId(fallbackId)
-        localStorage.setItem(ACTIVE_KEY, fallbackId ?? '')
+  /** 删除会话：先乐观更新本地，再请求后端硬删除；后端失败则回滚。
+   * 关键修复：此前根本未调用后端删除接口，导致登录时 listSessions 把服务端旧会话重新合并回本地。 */
+  const deleteSession = useCallback(
+    async (id: string) => {
+      // 乐观更新前先记录快照，便于失败回滚
+      let rollback: ChatSession[] | null = null
+      let rollbackActive: string | null = null
+      setSessions((prev) => {
+        rollback = prev
+        const next = prev.filter((s) => s.id !== id)
+        if (activeId === id) {
+          const fallbackId = next[0]?.id ?? null
+          setActiveId(fallbackId)
+          localStorage.setItem(ACTIVE_KEY, fallbackId ?? '')
+        }
+        return next
+      })
+      setSending(false)
+      try {
+        await deleteSessionApi(id)
+      } catch {
+        // 回滚本地状态，保证 UI 与后端一致
+        if (rollback) setSessions(rollback)
+        if (rollbackActive !== null) setActiveId(rollbackActive)
       }
-      return next
-    })
-    setSending(false)
-  }
+    },
+    [activeId],
+  )
 
   /** 处理会话消息变化 */
   const handleMessagesChange = (id: string) => (messages: ChatMessage[]) => {
@@ -182,8 +239,9 @@ export default function App() {
     setUser(nextUser)
     localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser))
     setShowAuth(false)
-    // 登录后进入对话页
-    setView('chat')
+    // 登录后进入对话页（若此前点击「知识库」触发的登录，则直接进入知识库页）
+    applyView(pendingImport ? 'import' : 'chat', true)
+    setPendingImport(false)
     // FR-AUTH-02：登录后立即取角色，用于 admin 视图判定
     authMe(token)
       .then((data) => {
@@ -227,83 +285,71 @@ export default function App() {
     }
     setUser(null)
     localStorage.removeItem(AUTH_KEY)
+    setPendingImport(false)
+    // 退出后知识库页不可用，退回对话页
+    applyView('chat', true)
   }
 
   /** 点击上传知识库：需先登录（普通用户也可管理自己的知识库） */
   const handleUploadClick = () => {
     if (!user) {
+      setPendingImport(true)
       setShowAuth(true)
       return
     }
-    setView('import')
+    applyView('import')
+  }
+
+  /** 关闭登录弹窗并清除挂起目标 */
+  const closeAuth = () => {
+    setShowAuth(false)
+    setPendingImport(false)
   }
 
   return (
-    <div className="app">
-      <Sidebar
-        collapsed={collapsed}
-        sessions={sessions}
-        activeSessionId={activeId}
-        activeView={view}
-        theme={theme}
-        isLoggedIn={!!user}
-        isAdmin={user?.role === 'admin'}
-        username={user?.username ?? ''}
-        onToggle={() => setCollapsed((c) => !c)}
-        onNewChat={newChat}
-        onSelectSession={selectSession}
-        onRenameSession={renameSession}
-        onDeleteSession={deleteSession}
-        onSwitchView={(v) => setView(v)}
-        onThemeChange={setTheme}
-        onLogin={() => setShowAuth(true)}
-        onLogout={handleLogout}
-      />
-
-      <main className="main">
-        {view === 'chat' && activeSession ? (
-          <>
-            {/* 顶部标题栏（独立组件：标题居中 + 右上角上传知识库） */}
-            <ChatHeader
-              title={activeSession.title || '新对话'}
-              meta={
-                activeSession.messages.length > 0
-                  ? `${activeSession.messages.length} 条消息`
-                  : '欢迎开始新的对话'
-              }
-              onUpload={handleUploadClick}
-            />
-            <ChatPanel
-              session={activeSession}
-              sending={sending}
-              username={user?.username ?? ''}
-              onChange={handleMessagesChange(activeSession.id)}
-              onSendingChange={setSending}
-            />
-          </>
-        ) : (
-          <>
-            <ChatHeader
-              title="知识库管理"
-              meta="上传文档，建立私有知识库"
-              showUpload={false}
-              onUpload={() => setView('import')}
-            />
-            <div className="import-wrap">
-              <ImportPanel isAdmin={user?.role === 'admin'} username={user?.username ?? ''} />
-            </div>
-          </>
-        )}
-      </main>
+    <>
+      {view === 'chat' ? (
+        <ChatPage
+          collapsed={collapsed}
+          sessions={sessions}
+          activeSessionId={activeId}
+          activeView={view}
+          theme={theme}
+          isLoggedIn={!!user}
+          username={user?.username ?? ''}
+          sending={sending}
+          activeSession={activeSession}
+          onToggle={() => setCollapsed((c) => !c)}
+          onNewChat={newChat}
+          onSelectSession={selectSession}
+          onRenameSession={renameSession}
+          onDeleteSession={deleteSession}
+          onSwitchView={(v) => applyView(v)}
+          onThemeChange={setTheme}
+          onLogin={() => setShowAuth(true)}
+          onLogout={handleLogout}
+          onUpload={handleUploadClick}
+          onMessagesChange={
+            activeId ? handleMessagesChange(activeId) : () => {}
+          }
+          onSendingChange={setSending}
+        />
+      ) : (
+        <KnowledgePage
+          isAdmin={user?.role === 'admin'}
+          username={user?.username ?? ''}
+          onBack={() => applyView('chat')}
+        />
+      )}
 
       {/* 登录 / 注册 modal（未登录对话时点击「登录」弹出） */}
       {showAuth && (
-        <div className="auth-overlay" onClick={() => setShowAuth(false)}>
+        <div className="auth-overlay" onClick={closeAuth}>
           <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
-            <AuthPanel onLogin={handleLogin} onCancel={() => setShowAuth(false)} />
+            <AuthPanel onLogin={handleLogin} onCancel={closeAuth} />
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

@@ -1,0 +1,252 @@
+/* ======================= 知识库管理 · 深色主题覆盖 ======================= */
+/* 全部为 [data-theme='dark'] 下的覆盖规则，集中在最后引入以覆盖前面各模块的浅色默认值 */
+
+[data-theme='dark'] .add-book-cover {
+  background: linear-gradient(135deg, rgba(200, 155, 60, 0.08) 0%, rgba(27, 42, 78, 0.18) 100%),
+              linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+[data-theme='dark'] .add-book-cover .book-title { color: var(--gold, #D9B25A); }
+[data-theme='dark'] .add-book-cover .book-author { color: #94a3b8; }
+[data-theme='dark'] .add-book-cover .book-emoji { background: rgba(200, 155, 60, 0.15); }
+
+[data-theme='dark'] .kb-section:hover {
+  border-color: rgba(74, 111, 165, 0.3);
+}
+[data-theme='dark'] .dropzone {
+  background: linear-gradient(180deg, rgba(74, 111, 165, 0.1) 0%, transparent 100%);
+}
+[data-theme='dark'] .dropzone:hover {
+  background: rgba(74, 111, 165, 0.15);
+}
+[data-theme='dark'] .dropzone.dragover {
+  background: rgba(74, 111, 165, 0.2);
+}
+[data-theme='dark'] .vis-card.active.vis-private {
+  background: rgba(74, 111, 165, 0.2);
+  border-color: var(--primary);
+}
+[data-theme='dark'] .vis-card.active.vis-team {
+  background: rgba(46, 125, 79, 0.25);
+  border-color: #2E7D4F;
+}
+[data-theme='dark'] .vis-card.active.vis-shared {
+  background: rgba(217, 178, 90, 0.2);
+  border-color: var(--gold);
+}
+[data-theme='dark'] .vis-card:hover:not(.disabled) {
+  background: rgba(74, 111, 165, 0.1);
+}
+[data-theme='dark'] .doc-item {
+  background: rgba(138, 147, 162, 0.05);
+}
+[data-theme='dark'] .doc-item:hover {
+  background: rgba(74, 111, 165, 0.1);
+  border-color: var(--primary);
+}
+[data-theme='dark'] .doc-icon {
+  background: rgba(74, 111, 165, 0.18);
+}
+[data-theme='dark'] .file-item {
+  background: rgba(138, 147, 162, 0.05);
+}
+[data-theme='dark'] .file-item:hover {
+  background: rgba(74, 111, 165, 0.1);
+  border-color: var(--primary);
+}
+[data-theme='dark'] .task {
+  background: rgba(138, 147, 162, 0.05);
+}
+[data-theme='dark'] .task:hover {
+  border-color: var(--primary);
+}
+[data-theme='dark'] .task-progress {
+  background: rgba(138, 147, 162, 0.15);
+}
+[data-theme='dark'] .node-chip {
+  background: rgba(138, 147, 162, 0.12);
+  border-color: transparent;
+  color: var(--text-muted);
+}
+[data-theme='dark'] .kb-tab {
+  background: rgba(138, 147, 162, 0.08);
+}
+[data-theme='dark'] .kb-tab.active {
+  background: rgba(74, 111, 165, 0.2);
+  color: var(--primary);
+}
+[data-theme='dark'] .kb-tab-num {
+  background: rgba(74, 111, 165, 0.2);
+}
+[data-theme='dark'] .kb-tab:not(.active) .kb-tab-num {
+  background: rgba(138, 147, 162, 0.15);
+  color: var(--text-muted);
+}
+[data-theme='dark'] .kb-empty {
+  background: rgba(138, 147, 162, 0.05);
+}
+/* 深色：知识库管理页左侧栏 / 书架卡片
+ * 说明：侧栏已统一走 --sidebar-* 变量（hover / 新建输入框等随变量自动适配），
+ * 此处仅保留需单独定制的项。 */
+[data-theme='dark'] .kb-side-item.active {
+  background: linear-gradient(100deg, rgba(74, 111, 165, 0.24) 0%, rgba(217, 178, 90, 0.12) 100%);
+  border-color: rgba(217, 178, 90, 0.45);
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .kb-side-item.active .kb-side-name { color: var(--gold, #D9B25A); }
+[data-theme='dark'] .kb-side-icon {
+  background: rgba(138, 147, 162, 0.1);
+  box-shadow: inset 0 0 0 1px var(--border, #2A3345);
+}
+[data-theme='dark'] .kb-side-item.active .kb-side-icon {
+  background: linear-gradient(135deg, var(--primary, #4A6FA5) 0%, var(--primary-dark, #1B2A4E) 100%);
+}
+[data-theme='dark'] .kb-side-tag {
+  color: var(--gold, #D9B25A);
+  background: rgba(217, 178, 90, 0.16);
+}
+[data-theme='dark'] .kb-side-new:focus-within {
+  border-color: var(--primary, #4A6FA5);
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.18);
+}
+[data-theme='dark'] .book-card {
+  background: var(--card, #1A2235);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+[data-theme='dark'] .book-card:hover {
+  border-color: rgba(217, 178, 90, 0.45);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+}
+[data-theme='dark'] .book-foot-meta span {
+  background: rgba(138, 147, 162, 0.16);
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .book-actions .btn.ghost {
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .book-actions .btn.ghost:hover {
+  background: rgba(74, 111, 165, 0.18);
+  border-color: var(--primary, #4A6FA5);
+  color: var(--primary, #4A6FA5);
+}
+[data-theme='dark'] .kb-group {
+  background: var(--card, #1A2235);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+[data-theme='dark'] .kb-group-head {
+  background: linear-gradient(180deg, rgba(138, 147, 162, 0.06) 0%, transparent 100%);
+}
+[data-theme='dark'] .kb-group-icon {
+  background: rgba(74, 111, 165, 0.2);
+  color: var(--primary, #4A6FA5);
+}
+[data-theme='dark'] .kb-back-btn {
+  background: var(--sidebar-settings-bg, rgba(138, 147, 162, 0.08));
+  border-color: var(--sidebar-border, #2A3345);
+}
+[data-theme='dark'] .kb-back-btn:hover {
+  background: var(--sidebar-hover-bg, rgba(74, 111, 165, 0.18));
+  border-color: var(--primary, #4A6FA5);
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .kb-stat-num {
+  color: var(--gold, #D9B25A);
+}
+[data-theme='dark'] .kb-stat-label {
+  color: var(--text-muted, #6B7382);
+}
+[data-theme='dark'] .kb-sidebar-empty-icon {
+  background: var(--sidebar-hover-bg, rgba(74, 111, 165, 0.18));
+  color: var(--primary, #4A6FA5);
+}
+[data-theme='dark'] .kb-side-more {
+  color: var(--sidebar-text, #6B7382);
+}
+[data-theme='dark'] .kb-side-more:hover {
+  background: var(--sidebar-hover-bg, rgba(74, 111, 165, 0.2));
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .kb-side-menu {
+  background: var(--card, #1A2235);
+  border-color: var(--border, #2A3345);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+[data-theme='dark'] .kb-side-menu-item {
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .kb-side-menu-item:hover {
+  background: rgba(74, 111, 165, 0.18);
+  color: var(--primary, #4A6FA5);
+}
+[data-theme='dark'] .kb-side-menu-item.danger:hover {
+  background: rgba(240, 114, 95, 0.16);
+  color: var(--danger, #F0725F);
+}
+[data-theme='dark'] .kb-side-item.editing {
+  background: rgba(74, 111, 165, 0.16);
+  border-color: var(--primary, #4A6FA5);
+}
+[data-theme='dark'] .kb-side-edit-input {
+  background: var(--bg, #131A29);
+  border-color: var(--primary, #4A6FA5);
+  color: var(--text, #C8CDD6);
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.18);
+}
+[data-theme='dark'] .kb-confirm-text b {
+  color: var(--gold, #D9B25A);
+}
+/* 批量操作模式 */
+[data-theme='dark'] .kb-inline-ok {
+  background: rgba(46, 125, 79, 0.18);
+  border-color: rgba(46, 125, 79, 0.4);
+  color: #7FCBA0;
+}
+[data-theme='dark'] .batch-bar {
+  background: var(--card, #1A2235);
+  border-bottom-color: var(--border, #2A3345);
+}
+[data-theme='dark'] .batch-count b {
+  color: var(--gold, #D9B25A);
+}
+[data-theme='dark'] .batch-kb-select,
+[data-theme='dark'] .batch-kb-select option {
+  background: var(--bg, #131A29);
+  color: var(--text, #C8CDD6);
+}
+[data-theme='dark'] .book-check-box {
+  background: rgba(26, 34, 53, 0.95);
+  border-color: var(--gold, #D9B25A);
+  color: var(--gold, #D9B25A);
+}
+[data-theme='dark'] .book-check:hover .book-check-box {
+  background: rgba(217, 178, 90, 0.2);
+}
+[data-theme='dark'] .book-card.selected {
+  border-color: var(--gold, #D9B25A);
+  box-shadow: 0 6px 20px rgba(217, 178, 90, 0.28);
+}
+[data-theme='dark'] .batch-toggle-btn.active {
+  background: rgba(217, 178, 90, 0.18);
+  border-color: var(--gold, #D9B25A);
+  color: var(--gold, #D9B25A);
+}
+[data-theme='dark'] .doc-readonly {
+  background: rgba(138, 147, 162, 0.1);
+}
+[data-theme='dark'] .btn.danger-ghost {
+  border-color: rgba(240, 114, 95, 0.3);
+}
+[data-theme='dark'] .book-cover {
+  box-shadow:
+    -3px 0 0 rgba(0, 0, 0, 0.35),
+    3px 4px 12px rgba(0, 0, 0, 0.45);
+}
+[data-theme='dark'] .book-card:hover .book-cover {
+  box-shadow:
+    -3px 0 0 rgba(0, 0, 0, 0.4),
+    4px 8px 20px rgba(0, 0, 0, 0.55);
+}
+[data-theme='dark'] .book-cover .vis-badge.vis-private {
+  background: rgba(205, 216, 236, 0.92);
+}

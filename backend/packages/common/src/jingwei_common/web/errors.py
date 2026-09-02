@@ -19,15 +19,25 @@ class ApiError(Exception):
     http_status: int = 500
     message: str = "服务内部错误"
 
-    def __init__(self, message: str | None = None, *, code: int | None = None):
+    # 可选的附加数据（如被拒文件清单），供前端精细化展示
+    data: dict | list | None = None
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        code: int | None = None,
+        data: dict | list | None = None,
+    ):
         super().__init__(message or self.message)
         if message is not None:
             self.message = message
         if code is not None:
             self.code = code
+        self.data = data
 
     def to_dict(self) -> dict:
-        return {"code": self.code, "message": self.message, "data": None}
+        return {"code": self.code, "message": self.message, "data": self.data}
 
 
 class BadRequestError(ApiError):

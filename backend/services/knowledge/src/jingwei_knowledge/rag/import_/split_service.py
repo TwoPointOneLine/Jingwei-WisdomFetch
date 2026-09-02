@@ -114,6 +114,10 @@ def split_document(state) -> dict:
     chunks = []
     for content, title, parent_title in segs:
         cid = hashlib.md5(f"{file_title}|{title}|{content}".encode()).hexdigest()[:16]
+        # G-04：entry_name 优先取首标题，回退 parent_title，再回退 file_title（条目名称语义）
+        entry_name = (title or parent_title or file_title) or "未命名条目"
+        chunk_meta = dict(doc_meta)
+        chunk_meta["entry_name"] = chunk_meta.get("entry_name") or entry_name
         chunks.append(
             {
                 "chunk_id": cid,
@@ -121,7 +125,7 @@ def split_document(state) -> dict:
                 "title": title,
                 "parent_title": parent_title,
                 "file_title": file_title,
-                "doc_meta": doc_meta,
+                "doc_meta": chunk_meta,
             }
         )
 

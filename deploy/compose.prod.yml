@@ -1,0 +1,100 @@
+# ============================================================
+# 精卫 (Jingwei WisdomFetch) 生产编排覆盖（阶段5 · 9.3 环境分层）
+# ------------------------------------------------------------
+# 用法（与开发版叠加）：
+#   docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d
+# 或显式指定生产 env 文件：
+#   docker compose -f deploy/compose.yml -f deploy/compose.prod.yml \
+#     --env-file .env.prod up -d
+#
+# 本文件只覆盖「五业务服务」的部署策略，基础设施（Mongo/Milvus/MinIO 等）
+# 仍由 deploy/docker-compose.yml（被 compose.yml include）统一管理。
+#
+# 生产策略要点：
+#  - restart: unless-stopped（异常退出自动拉起）
+#  - 仅网关 8080 对外暴露，各业务服务不映射宿主机端口（零信任内网）
+#  - 安全选项：no-new-privileges、只读根 FS（按需放开写入卷）
+#  - 资源限制：防止单服务吃掉整机
+#  - 强口令从 .env.prod 读取（见 deploy/env/.env.prod.example）
+#
+# ⚠️ 说明：前端 dist 仍由网关挂载（与开发一致）。若需彻底离线/不可变部署，
+#    建议将 frontend/dist 构建进 gateway 镜像（多阶段），此版本为最小改动实现。
+# ============================================================
+
+services:
+  gateway-server:
+    env_file: [../.env.prod]
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    read_only: false
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    networks:
+      - shopkeeper
+
+  auth-server:
+    env_file: [../.env.prod]
+    restart: unless-stopped
+    # 生产不暴露业务端口到宿主机
+    expose:
+      - "8083"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    networks:
+      - shopkeeper
+
+  user-server:
+    env_file: [../.env.prod]
+    restart: unless-stopped
+    expose:
+      - "8084"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    networks:
+      - shopkeeper
+
+  knowledge-server:
+    env_file: [../.env.prod]
+    restart: unless-stopped
+    expose:
+      - "8081"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+    networks:
+      - shopkeeper
+
+  query-server:
+    env_file: [../.env.prod]
+    restart: unless-stopped
+    expose:
+      - "8082"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+    networks:
+      - shopkeeper

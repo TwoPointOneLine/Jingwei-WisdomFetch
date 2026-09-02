@@ -9,7 +9,9 @@ from jingwei_knowledge.process.import_chain.state import ImportGraphState
 
 @node_log("node_pdf_to_md")
 def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
-    add_running_task(state["task_id"], "node_pdf_to_md")
+    task_id = state["task_id"]
+    add_running_task(task_id, "node_pdf_to_md")
     state = parse_pdf_to_markdown(state)
-    add_done_task(state["task_id"], "node_pdf_to_md")
+    state["task_id"] = task_id  # service 返回值不含 task_id，回填保证状态追踪可用
+    add_done_task(task_id, "node_pdf_to_md")
     return state

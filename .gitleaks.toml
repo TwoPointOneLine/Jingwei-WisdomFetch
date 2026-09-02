@@ -1,0 +1,46 @@
+# gitleaks 配置（CI secret-scan job 与本地复用）
+# 基于上游默认规则，叠加本项目的白名单。
+title = "Jingwei WisdomFetch gitleaks config"
+
+[extend]
+# 使用 gitleaks 内置默认规则
+useDefault = true
+
+# 允许误报路径（文档/示例/测试夹具）
+[[allowlist.paths]]
+description = "文档与示例文档"
+regexes = [
+  '''docs/.*\.md$''',
+  '''README\.md$''',
+  '''CHANGELOG\.md$''',
+  '''CONTRIBUTING\.md$''',
+]
+
+[[allowlist.paths]]
+description = "环境模板（仅占位符，无真实凭据）"
+regexes = [
+  '''\.env\.example$''',
+  '''deploy/env/\.env.*\.example$''',
+]
+
+[[allowlist.paths]]
+description = "测试与快照"
+regexes = [
+  '''tests?/.*''',
+  '''(^|/)fixtures?/.*''',
+  '''\.github/.*''',
+]
+
+# 针对 docstring 内 mongodb://user:pw@host 这类示例的全局豁免
+[[allowlist.regexes]]
+description = "文档性质的连接串示例"
+regex = '''mongodb://user:pw@host'''
+
+# 针对常见占位符的全局豁免（避免 env 示例误报）
+[[allowlist.regexes]]
+description = "占位符凭据"
+regex = '''(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*['"]?(your_|example|placeholder|change[_-]?me|<)'''
+
+# gitleaks 允许规则匹配的最大字节数
+[rules]
+  # 默认规则已覆盖 AWS/GitHub/私钥/JWT 等，此处不新增自定义规则。

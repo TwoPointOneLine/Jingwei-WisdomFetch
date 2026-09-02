@@ -11,9 +11,11 @@ import type {
   ApiResponse,
   DocumentItem,
   ImportStatusResponse,
+  KnowledgeBase,
   ModelListData,
   QueryRequest,
   QuerySubmitData,
+  RejectedFile,
   TaskResultData,
   UploadResponse,
   Visibility,
@@ -121,6 +123,18 @@ export async function listSessions(): Promise<
   return (json.data?.sessions ?? []) as any[]
 }
 
+/** 删除服务端会话及其全部消息（硬删除）。未登录访客经 X-Anon-Id 头由服务端校验归属。 */
+export async function deleteSessionApi(sessionId: string): Promise<void> {
+  const res = await fetch(`${QUERY_PREFIX}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  // 访客态会话可能尚未落库（首次发消息才创建），服务端返回 404 视为「无可删除」正常处理
+  if (res.status === 404) return
+  const json = (await res.json().catch(() => ({}))) as ApiResponse<{ session_id: string }>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `删除会话失败: ${res.status}`)
+}
+
 /** 登录即归并：把本浏览器（anon_id）下遗留的 guest 会话归并到当前登录用户。 */
 export async function claimGuestSessions(): Promise<number> {
   const res = await fetch(`${QUERY_PREFIX}/sessions/claim`, {
@@ -133,19 +147,33 @@ export async function claimGuestSessions(): Promise<number> {
   return json.data?.claimed ?? 0
 }
 
-/** 上传文件并返回任务 id 列表；visibility 控制资料私有/团队/共享 */
-export async function uploadFiles(files: File[], visibility: Visibility = 'private'): Promise<string[]> {
+/**
+ * 上传文件并返回任务 id 列表；visibility 控制资料私有/团队/共享；kb 指定目标逻辑知识库。
+ *
+ * G-01：后端会拒绝不支持的格式。全部被拒时抛错（含原因）；部分被拒时返回
+ * `rejected` 清单，调用方须展示，避免"上传成功却零条入库"的静默失败。
+ */
+export async function uploadFiles(
+  files: File[],
+  visibility: Visibility = 'private',
+  kb: string = 'default',
+): Promise<{ task_ids: string[]; rejected: RejectedFile[] }> {
   const fd = new FormData()
   files.forEach((f) => fd.append('files', f))
   fd.append('visibility', visibility)
+  fd.append('kb_name', kb)
   const res = await fetch(`${IMPORT_PREFIX}/upload`, {
     method: 'POST',
     headers: authHeaders(),
     body: fd,
   })
-  if (!res.ok) throw new Error(`upload failed: ${res.status}`)
   const json = (await res.json()) as UploadResponse
-  return json.task_ids || []
+  if (!res.ok || json.code >= 400) {
+    // 全部被拒：优先展示后端给出的中文原因
+    const detail = json.rejected?.map((r) => r.reason).join('；')
+    throw new Error(detail || json.message || `upload failed: ${res.status}`)
+  }
+  return { task_ids: json.task_ids || [], rejected: json.rejected || [] }
 }
 
 /** 查询导入任务状态 */
@@ -165,22 +193,100 @@ export async function retryImport(taskId: string): Promise<void> {
   if (!res.ok || json.code !== 200) throw new Error(json.message || `重试失败: ${res.status}`)
 }
 
-/** 列出已导入资料（按当前用户权限隔离：普通用户仅见自己的与共享的） */
-export async function listDocuments(): Promise<DocumentItem[]> {
-  const res = await fetch(`${IMPORT_PREFIX}/documents`, { headers: authHeaders() })
+/** 列出已导入资料（按当前用户权限隔离：普通用户仅见自己的与共享的）；kb 可按知识库过滤 */
+export async function listDocuments(kb: string = ''): Promise<DocumentItem[]> {
+  const qs = kb ? `?kb_name=${encodeURIComponent(kb)}` : ''
+  const res = await fetch(`${IMPORT_PREFIX}/documents${qs}`, { headers: authHeaders() })
   const json = (await res.json()) as ApiResponse<{ items: DocumentItem[] }>
   if (!res.ok || json.code !== 200) throw new Error(json.message || `获取资料列表失败: ${res.status}`)
   return json.data?.items ?? []
 }
 
+/** 列出可用的逻辑知识库（默认库 + 当前用户创建的库） */
+export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
+  const res = await fetch(`${IMPORT_PREFIX}/knowledge-bases`, { headers: authHeaders() })
+  const json = (await res.json()) as ApiResponse<{ bases: KnowledgeBase[] }>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `获取知识库列表失败: ${res.status}`)
+  return json.data?.bases ?? []
+}
+
+/** 新建逻辑知识库 */
+export async function createKnowledgeBase(name: string): Promise<KnowledgeBase> {
+  const fd = new FormData()
+  fd.append('name', name)
+  const res = await fetch(`${IMPORT_PREFIX}/knowledge-bases`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: fd,
+  })
+  const json = (await res.json()) as ApiResponse<KnowledgeBase>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `创建知识库失败: ${res.status}`)
+  return json.data as KnowledgeBase
+}
+
+/** 重命名逻辑知识库（默认库不可重命名）；返回新名称与受影响的资料数 */
+export async function renameKnowledgeBase(
+  name: string,
+  newName: string,
+): Promise<{ name: string; renamed: number }> {
+  const fd = new FormData()
+  fd.append('new_name', newName)
+  const res = await fetch(`${IMPORT_PREFIX}/knowledge-bases/${encodeURIComponent(name)}/rename`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: fd,
+  })
+  const json = (await res.json()) as ApiResponse<{ name: string; renamed: number }>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `重命名知识库失败: ${res.status}`)
+  return json.data as { name: string; renamed: number }
+}
+
+/** 删除逻辑知识库（默认库不可删除）；库内资料会迁移到默认库 */
+export async function deleteKnowledgeBase(
+  name: string,
+): Promise<{ name: string; moved_items: number; moved_to: string }> {
+  const res = await fetch(`${IMPORT_PREFIX}/knowledge-bases/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  const json = (await res.json()) as ApiResponse<{
+    name: string
+    moved_items: number
+    moved_to: string
+  }>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `删除知识库失败: ${res.status}`)
+  return json.data as { name: string; moved_items: number; moved_to: string }
+}
+
 /** 切换资料可见性：private（仅本人）/ team（团队可见）/ shared（全员共享检索）。owner 或管理员可操作。 */
-export async function setDocumentVisibility(itemName: string, visibility: Visibility): Promise<void> {
+/**
+ * 切换资料可见性，返回后端**实际生效**的可见性。
+ * 返回值可能与请求值不同（例如无团队时后端会拒绝而非降级），调用方应以此为准做校验。
+ */
+export async function setDocumentVisibility(
+  itemName: string,
+  visibility: Visibility,
+): Promise<Visibility> {
   const res = await fetch(
     `${IMPORT_PREFIX}/documents/${encodeURIComponent(itemName)}/visibility?visibility=${visibility}`,
     { method: 'POST', headers: authHeaders() },
   )
-  const json = (await res.json()) as ApiResponse<unknown>
+  const json = (await res.json()) as ApiResponse<{ visibility?: Visibility }>
   if (!res.ok || json.code !== 200) throw new Error(json.message || `切换可见性失败: ${res.status}`)
+  return (json.data?.visibility ?? visibility) as Visibility
+}
+
+/** 将资料移动到其它逻辑知识库（owner 或管理员可操作） */
+export async function moveDocument(itemName: string, targetKb: string): Promise<void> {
+  const fd = new FormData()
+  fd.append('target_kb', targetKb)
+  const res = await fetch(`${IMPORT_PREFIX}/documents/${encodeURIComponent(itemName)}/move`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: fd,
+  })
+  const json = (await res.json()) as ApiResponse<unknown>
+  if (!res.ok || json.code !== 200) throw new Error(json.message || `移动失败: ${res.status}`)
 }
 
 /** 下线某资料，删除其全部 chunk（owner 或管理员可操作） */

@@ -6,12 +6,13 @@
   - 确保 collection 存在且 schema + 混合索引（BM25 稀疏）就绪；
   - 批量插入，并将 Milvus 返回的 primary key 回填到 chunk_id。
 """
-from datetime import UTC
+from datetime import UTC, datetime
 
 from jingwei_common.clients.milvus_client import milvus_client
 from jingwei_common.clients.mongo_client import mongo_client
 from jingwei_common.constants import (
     COLLECTION_KNOWLEDGE_ITEMS,
+    DEFAULT_KB,
     VIS_PRIVATE,
     VIS_TEAM,
 )
@@ -29,6 +30,7 @@ def index_chunks(state) -> dict:
     owner = state.get("owner", "") or ""
     visibility = state.get("visibility", VIS_PRIVATE) or VIS_PRIVATE
     team_id = state.get("team_id", "") or ""
+    kb_name = state.get("kb_name", DEFAULT_KB) or DEFAULT_KB
 
     if not chunks:
         return {"done_count": 0}
@@ -64,17 +66,24 @@ def index_chunks(state) -> dict:
                 "file_title": c.get("file_title", ""),
                 "dense_vector": c.get("dense_vec") or [],
                 "sparse": c.get("sparse_vec") or [],
-                # FR-IMP-03 结构化字段（动态字段落库）
+                # FR-IMP-03 / G-04 结构化字段（动态字段落库）
                 "content_type": meta.get("content_type", ""),
                 "product_name": meta.get("product_name", ""),
                 "product_code": meta.get("product_code", ""),
                 "risk_level": meta.get("risk_level", ""),
                 "publish_date": meta.get("publish_date", ""),
+                "institution_name": meta.get("institution_name", ""),
+                "industry": meta.get("industry", ""),
+                "market": meta.get("market", ""),
+                "entry_name": meta.get("entry_name", ""),
                 "source_file": meta.get("source_file", ""),
+                "source_path": meta.get("source_path", ""),
                 # 普通用户知识库隔离：owner + 可见性 + 团队空间
                 "owner": owner,
                 "visibility": visibility,
                 "team_id": team_id if visibility == VIS_TEAM else "",
+                # 逻辑知识库：同一集合内以 kb_name 字段区分
+                "kb_name": kb_name,
             }
         )
 
@@ -114,11 +123,12 @@ def index_chunks(state) -> dict:
                     "owner": owner,
                     "visibility": visibility,
                     "team_id": team_id if visibility == VIS_TEAM else "",
+                    "kb_name": kb_name,
                     "source_files": source_files,
                     "chunk_count": len(chunks),
-                    "updated_at": UTC.now(),
+                    "updated_at": datetime.now(UTC),
                 },
-                "$setOnInsert": {"created_at": UTC.now()},
+                "$setOnInsert": {"created_at": datetime.now(UTC)},
             },
             upsert=True,
         )

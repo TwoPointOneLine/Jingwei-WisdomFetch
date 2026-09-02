@@ -143,28 +143,34 @@ uv run pytest
 
 ## 配置
 
-在**仓库根**创建 `.env` 并填入真实密钥与服务地址（应用运行时由 backend 服务从仓库根 `.env` 读取；compose 编排通过 `env_file: [../.env]` 引用仓库根 `.env`）。可参考各服务自带的模板：
+在**仓库根**创建 `.env` 并填入真实密钥与服务地址（应用运行时由 backend 服务从仓库根 `.env` 读取；compose 编排通过 `env_file: [../.env]` 引用仓库根 `.env`）。
+
+模板**唯一**，位于 `deploy/env/.env.example`（此前分散在 deploy/ 与各服务目录共 6 处，现已合并）：
 
 ```bash
-# 仓库根 .env 参考 backend/services/{gateway,auth,user,knowledge,query}/.env.example
-copy backend\services\gateway\.env.example .env
+# Windows
+copy deploy\env\.env.example .env
+# Linux
+cp deploy/env/.env.example .env
 ```
 
-> 注：原 `deploy/.env.example` 已不存在，环境变量模板分散在各服务目录下。
+> ⚠️ 位置必须是**仓库根**，放到 `deploy/.env` 或 `backend/.env` 都不会生效。
+> 必填项：`OPENAI_API_KEY`（百炼 Key，留占位值会导致 query_rewrite / HyDE 失效）、
+> `BGE_M3_PATH` / `BGE_RERANKER_LARGE`（本地模型路径，Windows 请用正斜杠）。
+> 非本机部署前请修改所有标注 `CHANGE_ME` 的口令。
 
 ## 一键启动（本地运行）
 
 提供一键脚本，自动检查基础设施（Milvus / MongoDB / MinIO）连通性、并行拉起**网关 + 认证 + 用户 + 知识 + 问答五个服务**并等待健康：
 
 ```bash
-# 最简一键（双击 backend/run_backend.bat）：自动拉起基础设施(docker compose) + 五大后端服务，前台常驻，Ctrl+C 停止
-backend\run_backend.bat
+# 最简一键（双击 backend/run.bat）：检查基础设施 + 启动五大后端服务，前台常驻，Ctrl+C 停止
+backend\run.bat
 
-# 或手动分步（在 backend/ 目录下）：
+# 手动分步（在 backend/ 目录下）：
 # 1) 先拉起基础设施（Docker，编排文件在仓库根 deploy/）
 docker compose -f ..\deploy\docker-compose.yml up -d
 # 2) 启动全部服务（前台常驻，Ctrl+C 停止）；--with-infra 可合并第 1 步
-backend\run.bat
 backend\run.bat --with-infra
 uv run python scripts/start_all.py --with-infra
 
@@ -173,8 +179,12 @@ backend\run.bat --stop
 uv run python scripts/start_all.py --stop
 
 # 仅检查环境（不启动）
+backend\run.bat --check
 uv run python scripts/start_all.py --check
 ```
+
+> 注：原 `run_backend.bat` 已删除（与 `run.bat` 功能重叠）。`run.bat` 透传全部参数，
+> 支持 `--with-infra` / `--stop` / `--check`，功能更完整。
 
 启动成功后，所有流量走**网关统一入口（8080）**：
 - 前端主界面：http://127.0.0.1:8080/
@@ -212,15 +222,19 @@ jingwei-wisdom-fetch/                 # 仓库根
 │   │   ├── user/                    #     jingwei_user      用户（8084）
 │   │   ├── knowledge/               #     jingwei_knowledge 知识导入（8081）
 │   │   └── query/                   #     jingwei_query     问答（8082）
-│   ├── deploy/docker/               #   Dockerfile（uv 多阶段构建）
 │   ├── scripts/                     #   deploy.py / deploy.bat / start_all.py
 │   ├── pyproject.toml               #   uv workspace 根配置
 │   ├── uv.lock
-│   └── run.bat / run_backend.bat    # 一键启动/停止
+│   └── run.bat                      # 一键启动/停止（透传 --with-infra/--stop/--check）
 ├── deploy/                          # 仓库根：compose.yml / docker-compose.yml（基础设施编排）
+│   └── docker/                      #   Dockerfile（uv 多阶段构建，build context = 仓库根）
 ├── frontend/                        # Vite + React 19 + TS 前端（pnpm）
-└── docs/                            # 产品/需求/架构文档
+└── docs/                            # 文档唯一根（见 docs/README.md）
+    ├── product/                     #   产品/需求/架构（00~02）
+    └── backend/                     #   后端模块文档（00 总览 + 01~06 各模块）
 ```
+
+> 模块详细设计文档位于 [`docs/backend/`](../docs/backend/)（原 `backend/docs/`，2026-08-31 归位到文档唯一根）。
 
 ## Docker 部署（阶段 5：全模块独立镜像 + 按需启停）
 
@@ -229,8 +243,8 @@ jingwei-wisdom-fetch/                 # 仓库根
 ### 1. 一键部署（推荐）
 
 ```bash
-# 在仓库根创建 .env（参考 backend/services/{gateway,auth,user,knowledge,query}/.env.example）
-copy backend\services\gateway\.env.example .env
+# 在仓库根创建 .env（唯一模板：deploy/env/.env.example）
+copy deploy\env\.env.example .env
 
 # 构建前端 + 五服务镜像并全部启动（依赖自动拉起，等待健康检查通过）
 backend\scripts\deploy.bat up
@@ -250,7 +264,7 @@ backend\scripts\deploy.bat logs gateway
 
 ```bash
 # 构建镜像（前端 dist 由网关经 volume 挂载托管，需先构建前端：pnpm --dir frontend build）
-# 注意：compose 编排在仓库根 deploy/，build context 指向 backend/
+# 注意：compose 编排在仓库根 deploy/，build context 指向仓库根（故需在仓库根执行）
 docker compose -f deploy/compose.yml build
 
 # 启动全部或按需（如只起网关+问答）
@@ -276,8 +290,8 @@ docker compose -f deploy/compose.yml down
 
 ### 4. 关键配置
 
-- **`.env`**：在仓库根创建（参考 `backend/services/*/.env.example`），填入 `OPENAI_API_KEY`、`BGE_MODELS_DIR`（本机模型根目录，挂载进知识/问答容器）等；`MONGO_DB_NAME` 为共享库名，勿改动。
-- **镜像**：`backend/deploy/{gateway,auth,user,knowledge,query}.Dockerfile`（uv workspace 多阶段构建，build context 为 `../backend`，tag `jingwei-{module}:0.1.0`），镜像内置 `/health` 健康检查。
+- **`.env`**：在仓库根创建（唯一模板 `deploy/env/.env.example`），填入 `OPENAI_API_KEY`、`BGE_MODELS_DIR`（本机模型根目录，挂载进知识/问答容器）等；`MONGO_DB_NAME` 为共享库名，勿改动。
+- **镜像**：`deploy/docker/{gateway,auth,user,knowledge,query}.Dockerfile`（uv workspace 多阶段构建，**build context 为仓库根**，COPY 路径均为 `backend/...`，tag `jingwei-{module}:0.1.0`），镜像内置 `/health` 健康检查。
 - **前端**：`pnpm --dir frontend build` 产出 `frontend/dist`，由网关容器挂载托管（`GATEWAY_DIST_DIR=/app/frontend/dist`）。
 - **CI/CD**：`.github/workflows/ci.yml`（lint/测试/前端/打包）与 `cd.yml`（打 `v*` tag 推送五服务镜像到 GHCR）；CI 配置位于 `backend/.github/`（随 backend 工程根）。
 

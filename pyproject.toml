@@ -25,3 +25,13 @@ dependencies = []
 
 # 明确不在此声明 uv workspace，保持 backend/ 为唯一的 Python 工程根。
 # 若后续需要根级统一脚本，可在此添加 [project.scripts]，但勿加 [tool.uv.workspace]。
+
+# 仓库根仅作 monorepo 标记，不是可安装的 Python 包。
+# package = false 告诉 uv 不要把根目录当作 workspace 成员，
+# 可避免生成根级虚锁 uv.lock（仅 5 行 / 139B，与 backend/uv.lock 同名并存，极易误判）。
+[tool.uv]
+package = false
+
+# 刻意【不】声明 [build-system]：
+# 一旦声明，pip install . 会走 legacy 兜底并产生告警，却构建不出有意义的内容；
+# 不声明时误执行 pip install . 会得到明确报错，优于静默失败。

@@ -11,6 +11,7 @@ from jingwei_common.audit import audit_log
 from jingwei_common.auth import auth_client
 from jingwei_common.clients.mongo_client import mongo_client
 from jingwei_common.config import settings
+from jingwei_common.config.rag_config import rag_config
 from jingwei_common.constants import COLLECTION_CHAT_FEEDBACK
 from jingwei_common.logging import logger
 from jingwei_common.web.sse_utils import SSEEvent, create_sse_queue, sse_generator
@@ -50,6 +51,21 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def _warmup_models():
+    """P0：服务启动时预热重排模型，避免首个用户请求承担 ~6.4s 的模型加载开销。
+
+    预热失败不打断启动（仅告警），运行时仍会按需懒加载。
+    """
+    try:
+        from jingwei_common.ai.reranker import BGEReranker
+
+        BGEReranker.get_model()
+        logger.success("重排模型预热完成")
+    except Exception as e:
+        logger.warning(f"重排模型预热失败（运行时将懒加载）: {e}")
+
+
 def run_query_task(
     task_id: str,
     session_id: str,
@@ -77,6 +93,10 @@ def run_query_task(
             "item_name": item_name or "",
             "model": model or "",
             "rephrased_query": "",
+            # FR-QA-07 / G-03：多轮上下文（由 node_query_history 填充）
+            "history": [],
+            "history_text": "",
+            "history_turns": rag_config.history_turns,
             "keywords": [],
             "vector_documents": [],
             "hyde_documents": [],
@@ -93,9 +113,9 @@ def run_query_task(
 
         # mock 快捷路径：跳过 LangGraph 全图（fan-in 抖动耗时大），直接生成模拟回答并流式
         if _lm.mock:
-            for n in ["node_query_rewrite", "node_query_vector", "node_query_hyde",
-                      "node_query_mcp", "node_query_rrf", "node_query_rerank",
-                      "node_query_rag", "node_query_save"]:
+            for n in ["node_query_history", "node_query_rewrite", "node_query_vector",
+                      "node_query_hyde", "node_query_mcp", "node_query_rrf",
+                      "node_query_rerank", "node_query_rag", "node_query_save"]:
                 add_done_task(task_id, n)
             mock_answer = (
                 f"这是模拟回答（LLM_MOCK 模式）。您的问题是：{query}。"
@@ -342,15 +362,31 @@ async def session_messages(request: Request, session_id: str):
 
 
 @app.patch("/sessions/{session_id}")
-async def rename_session_endpoint(session_id: str, req: SessionRenameRequest):
-    """重命名会话标题。"""
+async def rename_session_endpoint(request: Request, session_id: str, req: SessionRenameRequest):
+    """重命名会话标题。仅归属者可修改。"""
+    username, anon_id = _resolve_owner(request)
+    meta = history_repo.get_session_meta(session_id)
+    if username != "guest":
+        if meta.get("username") != username:
+            return QueryResponse(code=403, message="无权修改该会话", data=None)
+    else:
+        if meta.get("username") != "guest" or meta.get("anon_id") != anon_id:
+            return QueryResponse(code=403, message="无权修改该会话", data=None)
     history_repo.rename_session(session_id, req.title)
     return QueryResponse(code=200, message="success", data={"session_id": session_id, "title": req.title})
 
 
 @app.delete("/sessions/{session_id}")
-async def delete_session_endpoint(session_id: str):
-    """删除会话及其消息。"""
+async def delete_session_endpoint(request: Request, session_id: str):
+    """删除会话及其消息。仅归属者可删除。"""
+    username, anon_id = _resolve_owner(request)
+    meta = history_repo.get_session_meta(session_id)
+    if username != "guest":
+        if meta.get("username") != username:
+            return QueryResponse(code=403, message="无权删除该会话", data=None)
+    else:
+        if meta.get("username") != "guest" or meta.get("anon_id") != anon_id:
+            return QueryResponse(code=403, message="无权删除该会话", data=None)
     history_repo.clear_session(session_id)
     return QueryResponse(code=200, message="success", data={"session_id": session_id})
 

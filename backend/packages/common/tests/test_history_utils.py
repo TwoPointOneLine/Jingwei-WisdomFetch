@@ -1,6 +1,7 @@
 """历史会话工具测试：会话隔离（登录用户/匿名访客）与登录归并。"""
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from itertools import count
 
 import pytest
 from jingwei_common.clients import mongo_history_utils as mh
@@ -56,6 +57,17 @@ class _FakeCollection:
                 for part in parts[:-1]:
                     cur = cur.setdefault(part, {})
                 cur[parts[-1]] = value
+        # 真实 MongoDB 支持 $unset（此处用于归并后移除 meta.anon_id）
+        if "$unset" in update:
+            for key in update["$unset"]:
+                parts = key.split(".")
+                cur = doc
+                for part in parts[:-1]:
+                    if not isinstance(cur.get(part), dict):
+                        break
+                    cur = cur[part]
+                else:
+                    cur.pop(parts[-1], None)
 
     # ── Mongo 接口 ───────────────────────────
     def find_one(self, query: dict) -> dict | None:
@@ -101,6 +113,18 @@ def fake_mongo(monkeypatch):
         return collections[name]
 
     monkeypatch.setattr(mongo_client, "get_collection", get_collection)
+
+    # Windows 上 datetime.now() 分辨率约 15ms，连续插入的多条消息会落在同一 tick，
+    # 使「按时间取最近 N 条」的排序不可判定。此处注入每次调用前进 1ms 的时钟，
+    # 保证用例可重复（真实环境消息间隔远大于此，产品代码无需特殊处理）。
+    class _StepDatetime(datetime):
+        _steps = count(1)
+
+        @classmethod
+        def now(cls, tz=None):
+            return super().now(tz) + timedelta(milliseconds=next(cls._steps))
+
+    monkeypatch.setattr(mh, "datetime", _StepDatetime)
     return get_collection
 
 

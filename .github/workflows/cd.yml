@@ -7,8 +7,29 @@ on:
       - "v*"
 
 jobs:
+  # 前端构建门禁：前端不可构建则阻断发布（当前镜像不含 dist，仅作质量校验与产物归档）
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 启用 corepack（pnpm）
+        run: corepack enable
+      - name: 安装依赖
+        run: pnpm --dir frontend install --frozen-lockfile
+      - name: 构建
+        run: pnpm --dir frontend build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
   images:
     name: Build & push images
+    needs: [frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,6 +46,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 路径约定（务必与 deploy/compose.yml 保持一致）：
+      #   Dockerfile 位于 deploy/docker/{gateway,auth,user,knowledge,query}.Dockerfile
+      #   构建上下文 = 仓库根（Dockerfile 内 COPY 均为 backend/xxx 相对仓库根的路径）
+      #   注意：不要改为 backend/ 上下文，否则 COPY backend/... 会找不到文件
       - name: 构建并推送五服务镜像
         shell: bash
         env:

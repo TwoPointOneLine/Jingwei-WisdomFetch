@@ -3,23 +3,31 @@
 /** 导入任务状态 */
 export type TaskStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
-/** 导入链节点（用于进度展示） */
+/** 导入链节点（用于进度展示，须与后端 main_graph 节点保持一致；upload_file 属上传阶段不计入） */
 export const IMPORT_NODES = [
-  'upload_file',
   'node_entry',
   'node_pdf_to_md',
   'node_md_img',
+  'node_document_metadata',
   'node_document_split',
   'node_item_name_recognition',
   'node_bge_embedding',
   'node_import_milvus',
 ] as const
 
+/** G-01：被拒绝的文件（格式不支持等） */
+export interface RejectedFile {
+  filename: string
+  reason: string
+}
+
 /** 上传响应（import-server） */
 export interface UploadResponse {
   code: number
   message: string
   task_ids: string[]
+  /** G-01：被拒文件清单，前端必须展示，否则用户以为"上传成功却查不到" */
+  rejected?: RejectedFile[]
 }
 
 /** 导入任务状态响应（import-server，扁平结构，无 data 包裹） */
@@ -101,7 +109,15 @@ export interface Citation {
   product_code?: string
   risk_level?: string
   publish_date?: string
+  /** G-04：补齐全字段 */
+  institution_name?: string
+  industry?: string
+  market?: string
+  entry_name?: string
   source_file?: string
+  source_path?: string
+  /** G-08：原文片段（命中原文档前 200 字） */
+  snippet?: string
 }
 
 /** SSE 事件类型 */
@@ -144,4 +160,15 @@ export interface DocumentItem {
   visibility?: Visibility
   /** 所属团队 ID（仅 visibility=team 时有效） */
   team_id?: string
+  /** 所属逻辑知识库（导入时选择；同一 Milvus 集合内以 kb_name 区分） */
+  kb_name?: string
+}
+
+/** 逻辑知识库（import-server /knowledge-bases） */
+export interface KnowledgeBase {
+  name: string
+  /** 创建者用户名（默认库为空串） */
+  owner: string
+  /** 是否默认库（default，内置无需创建） */
+  is_default: boolean
 }

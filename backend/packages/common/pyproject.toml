@@ -13,10 +13,18 @@ dependencies = [
     "minio>=7.2.0",
     "langchain-openai>=0.2.0",
     "sentence-transformers>=3.0.0",
-    "FlagEmbedding>=1.3.0",
+    # 锁定 1.3.5：保留 BGEM3FlagModel / FlagReranker 旧 API（1.4.2 已移除，改用 M3Embedder 等新类）；
+    # 与之兼容的 transformers 为 4.44.x（其 tokenizer 支持 return_colbert 参数）。
+    "FlagEmbedding==1.3.5",
+    # FlagEmbedding 1.3.5 元数据要求 transformers>=4.44.2；其 M3Embedder 会向 tokenizer
+    # 透传 return_colbert（4.44.2 已移除），由 jingwei_common.ai._flagembedding_compat
+    # 的 shim 静默忽略该参数，故锁定 4.44.x。
+    "transformers>=4.44.2,<4.45",
     "sse-starlette>=2.1.0",
     "starlette>=0.37.0",
     "rank-bm25>=0.2.2",
+    "requests>=2.31.0",
+    "modelscope>=1.39.1",
 ]
 
 [build-system]
@@ -26,9 +34,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/jingwei_common"]
 
-# 提示词等资源文件随 wheel 分发
-[tool.hatch.build.targets.wheel.force-include]
-"src/jingwei_common/resources" = "jingwei_common/resources"
+# 说明：此前存在 force-include 将 src/jingwei_common/resources 再映射到
+# jingwei_common/resources，与 packages 的结果重复，导致 hatchling 报
+# "A second file is being added to the wheel archive at the same path"，构建失败。
+# packages 已包含目录下全部文件（含 prompts/*.md 等非 .py 资源），无需 force-include。
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

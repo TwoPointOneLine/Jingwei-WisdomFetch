@@ -5,6 +5,7 @@
 由上层安全降级。
 """
 from jingwei_common.ai.providers import llm_provider
+from jingwei_common.config import rag_config
 from jingwei_common.config.lm_config import lm_config
 from jingwei_common.logging import logger
 
@@ -38,7 +39,7 @@ def vector_retrieve(state) -> dict:
         hits = chunks_store.hybrid_search(
             query_dense=query_dense,
             query_sparse=query_sparse,
-            top_k=10,
+            top_k=rag_config.retrieval_top_k,
             rerank="rrf",
             filter_expr=filter_expr,
         )

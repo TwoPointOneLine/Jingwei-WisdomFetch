@@ -7,7 +7,9 @@ from jingwei_knowledge.process.import_chain.state import ImportGraphState
 
 @node_log("node_document_split")
 def node_document_split(state: ImportGraphState) -> ImportGraphState:
-    add_running_task(state["task_id"], "node_document_split")
+    task_id = state["task_id"]
+    add_running_task(task_id, "node_document_split")
     state = split_document(state)
-    add_done_task(state["task_id"], "node_document_split")
+    state["task_id"] = task_id  # service 返回值不含 task_id，回填保证状态追踪可用
+    add_done_task(task_id, "node_document_split")
     return state

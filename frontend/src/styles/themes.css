@@ -1,0 +1,138 @@
+/* ======================= 精卫 · 聊天布局样式 ======================= */
+/* 主题配色遵循《精卫产品主题配色规范 v1.0》：深海靛为主色，沉稳金/知青绿点缀，语义色独立 */
+:root {
+  /* 品牌主色（深海靛三阶） */
+  --primary: #1B2A4E;
+  --primary-dark: #142038;
+  --primary-light: #E8EDF5;
+  --primary-hover: #3A4F82;
+
+  /* 点缀色 */
+  --gold: #C89B3C;
+  --gold-light: #E8D49A;
+
+  /* 中性色 */
+  --bg: #F5F7FA;
+  --sidebar-bg: #FFFFFF;
+  --sidebar-text: #8A93A2;
+  --sidebar-text-active: #1B2A4E;
+  --sidebar-hover-bg: rgba(27, 42, 78, 0.06);
+  --sidebar-border: #DDE1E7;
+  --sidebar-settings-bg: #FFFFFF;
+  --card: #FFFFFF;
+  --text: #3A3F4B;
+  --text-muted: #8A93A2;
+  --border: #DDE1E7;
+
+  /* 功能语义色 */
+  --success: #2ECC71;
+  --success-bg: #D5F5E3;
+  --warning: #E67E22;
+  --warning-bg: #FEF5E7;
+  --danger: #E74C3C;
+  --danger-bg: #FDEDEC;
+  --info: #3498DB;
+  --info-bg: #EAF4FC;
+
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(27, 42, 78, 0.06), 0 4px 14px rgba(27, 42, 78, 0.05);
+  --soft-shadow: 0 1px 3px rgba(27, 42, 78, 0.06), 0 6px 18px rgba(27, 42, 78, 0.07);
+  --sidebar-light: #FFFFFF;
+}
+
+/* ======================= 深色主题（data-theme="dark"）======================= */
+[data-theme='dark'] {
+  --primary: #4A6FA5;
+  --primary-dark: #1B2A4E;
+  --primary-light: #1A2235;
+  --primary-hover: #5C82BC;
+
+  --gold: #D9B25A;
+  --gold-light: #3A3320;
+
+  --bg: #0F1624;
+  --sidebar-bg: #1A2235;
+  --sidebar-text: #6B7382;
+  --sidebar-text-active: #C8CDD6;
+  --sidebar-hover-bg: rgba(74, 111, 165, 0.18);
+  --sidebar-border: #2A3345;
+  --sidebar-settings-bg: rgba(138, 147, 162, 0.08);
+  --card: #1A2235;
+  --text: #C8CDD6;
+  --text-muted: #6B7382;
+  --border: #2A3345;
+
+  --success: #34D399;
+  --success-bg: #11342A;
+  --warning: #F0A050;
+  --warning-bg: #3A2A18;
+  --danger: #F0725F;
+  --danger-bg: #3A2420;
+  --info: #5BA7E0;
+  --info-bg: #1A2E3A;
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  --soft-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.45);
+  --sidebar-light: #1A2235;
+}
+
+/* 深色下覆盖使用浅色硬编码的组件 */
+[data-theme='dark'] body,
+[data-theme='dark'] .app {
+  background: var(--bg);
+}
+[data-theme='dark'] .msg.assistant {
+  background: var(--card);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+[data-theme='dark'] .msg.user {
+  box-shadow: 0 2px 10px rgba(27, 42, 78, 0.4);
+}
+[data-theme='dark'] .source-item {
+  background: #111a2c;
+}
+[data-theme='dark'] .input-row textarea,
+[data-theme='dark'] .input-row input,
+[data-theme='dark'] .model-select {
+  background: #1e293b;
+  color: var(--text);
+}
+[data-theme='dark'] .input-row textarea:focus,
+[data-theme='dark'] .input-row input:focus {
+  background: #273449;
+}
+[data-theme='dark'] .dropzone {
+  background: var(--card);
+  color: var(--text-muted);
+}
+[data-theme='dark'] .dropzone.dragover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+[data-theme='dark'] .file-item,
+[data-theme='dark'] .task {
+  background: var(--card);
+}
+[data-theme='dark'] .source-item {
+  background: #111a2c;
+}
+[data-theme='dark'] .node-chip,
+[data-theme='dark'] .status-PENDING {
+  background: #334155;
+  color: #cbd5e1;
+}
+[data-theme='dark'] .btn.ghost {
+  border-color: #475569;
+}
+[data-theme='dark'] .ai-input-card {
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+}
+[data-theme='dark'] .model-picker {
+  background-color: #1e293b;
+}
+[data-theme='dark'] .model-option:hover {
+  background: var(--bg);
+}
+[data-theme='dark'] .ai-input-card:focus-within {
+  box-shadow: 0 0 0 3px var(--primary-light), 0 2px 16px rgba(0, 0, 0, 0.45);
+}

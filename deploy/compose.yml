@@ -7,7 +7,8 @@
 # 按需启停（仅起某几个模块，依赖自动拉起）：
 #   docker compose -f deploy/compose.yml up -d query-server gateway-server
 # 全部停止： docker compose -f deploy/compose.yml down
-# 环境变量： 复制 deploy/.env.example 为 .env 后按需修改
+# 环境变量： 复制 deploy/env/.env.example 为【仓库根】.env 后按需修改
+#            （本文件通过 env_file: [../.env] 引用，相对 deploy/ 即仓库根）
 # ============================================================
 
 name: jingwei-wisdom-fetch
@@ -21,8 +22,8 @@ services:
     container_name: jingwei-wisdom-fetch-gateway
     image: jingwei-gateway:0.1.0
     build:
-      context: ../backend
-      dockerfile: deploy/gateway.Dockerfile
+      context: ..
+      dockerfile: deploy/docker/gateway.Dockerfile
     env_file: [../.env]
     environment:
       GATEWAY_APP_PORT: 8080
@@ -41,7 +42,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./frontend/dist:/app/frontend/dist:ro
+      # 相对路径基准是本文件所在目录（deploy/），故需回退一级指向仓库根的 frontend/dist
+      - ../frontend/dist:/app/frontend/dist:ro
     depends_on:
       auth-server: { condition: service_healthy }
       user-server: { condition: service_healthy }
@@ -55,8 +57,8 @@ services:
     container_name: jingwei-wisdom-fetch-auth
     image: jingwei-auth:0.1.0
     build:
-      context: ../backend
-      dockerfile: deploy/auth.Dockerfile
+      context: ..
+      dockerfile: deploy/docker/auth.Dockerfile
     env_file: [../.env]
     environment:
       AUTH_APP_PORT: 8083
@@ -75,8 +77,8 @@ services:
     container_name: jingwei-wisdom-fetch-user
     image: jingwei-user:0.1.0
     build:
-      context: ../backend
-      dockerfile: deploy/user.Dockerfile
+      context: ..
+      dockerfile: deploy/docker/user.Dockerfile
     env_file: [../.env]
     environment:
       USER_APP_PORT: 8084
@@ -94,8 +96,8 @@ services:
     container_name: jingwei-wisdom-fetch-knowledge
     image: jingwei-knowledge:0.1.0
     build:
-      context: ../backend
-      dockerfile: deploy/knowledge.Dockerfile
+      context: ..
+      dockerfile: deploy/docker/knowledge.Dockerfile
     env_file: [../.env]
     environment:
       IMPORT_APP_PORT: 8081
@@ -124,8 +126,8 @@ services:
     container_name: jingwei-wisdom-fetch-query
     image: jingwei-query:0.1.0
     build:
-      context: ../backend
-      dockerfile: deploy/query.Dockerfile
+      context: ..
+      dockerfile: deploy/docker/query.Dockerfile
     env_file: [../.env]
     environment:
       QUERY_APP_PORT: 8082

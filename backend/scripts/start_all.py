@@ -52,28 +52,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 os.chdir(PROJECT_ROOT)
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# ---------- 读取端口配置（带默认值，缺 .env 也能跑） ----------
-try:
-    from dotenv import load_dotenv
+# ---------- 读取配置（复用公共底座，缺 .env 时用默认值也能跑） ----------
+# 修正：原实现只加载 backend/.env，而真实配置在【仓库根】.env，
+# 会导致 *_APP_PORT / APP_HOST 全部回退默认值。现复用公共底座，
+# 其已按 backend/.env -> 仓库根 .env 顺序加载，且支持 JINGWEI_ROOT 覆盖。
+from jingwei_common.config.common import LOG_DIR, env_int, env_str  # noqa: E402
 
-    load_dotenv(PROJECT_ROOT / ".env")
-except Exception:
-    pass
-
-
-def _env_int(key: str, default: int) -> int:
-    try:
-        return int(os.getenv(key, default))
-    except (TypeError, ValueError):
-        return default
-
-
-IMPORT_PORT = _env_int("IMPORT_APP_PORT", 8081)
-QUERY_PORT = _env_int("QUERY_APP_PORT", 8082)
-AUTH_PORT = _env_int("AUTH_APP_PORT", 8083)
-USER_PORT = _env_int("USER_APP_PORT", 8084)
-GATEWAY_PORT = _env_int("GATEWAY_APP_PORT", 8080)
-APP_HOST = os.getenv("APP_HOST", "127.0.0.1")
+IMPORT_PORT = env_int("IMPORT_APP_PORT", 8081)
+QUERY_PORT = env_int("QUERY_APP_PORT", 8082)
+AUTH_PORT = env_int("AUTH_APP_PORT", 8083)
+USER_PORT = env_int("USER_APP_PORT", 8084)
+GATEWAY_PORT = env_int("GATEWAY_APP_PORT", 8080)
+APP_HOST = env_str("APP_HOST", "127.0.0.1")
 
 # uvicorn 服务进程句柄（均为独立模块，见 services/ 与 packages/common/）
 _SERVERS = {
@@ -230,8 +220,10 @@ def _uv_python_cmd() -> list:
 def start_servers():
     print("\n[2/3] 启动服务 ...")
     procs = {}
-    log_dir = PROJECT_ROOT / "logs"
-    log_dir.mkdir(exist_ok=True)
+    # 与日志模块共用同一目录（默认 <仓库根>/var/log，可用 JINGWEI_LOG_DIR 覆盖），
+    # 避免服务自身日志与启动器日志分散在两处。
+    log_dir = LOG_DIR
+    log_dir.mkdir(parents=True, exist_ok=True)
     base = _uv_python_cmd()
     for name, cfg in _SERVERS.items():
         if port_in_use(cfg["port"]):
@@ -334,6 +326,8 @@ def main():
     parser = argparse.ArgumentParser(description="精卫一键启动")
     parser.add_argument("--with-infra", action="store_true",
                         help="先拉起并等待基础设施（docker compose）再启动服务")
+    parser.add_argument("--no-infra", action="store_true",
+                        help="仅启动服务、不拉起基础设施（默认行为，供 run.bat 显式传入）")
     parser.add_argument("--stop", action="store_true", help="停止已启动的服务")
     parser.add_argument("--check", action="store_true", help="仅检查环境，不启动")
     args = parser.parse_args()

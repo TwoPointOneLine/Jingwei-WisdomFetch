@@ -26,7 +26,11 @@ _META_PROMPT = (
     '  "product_name": "关联产品名称，无则空串",\n'
     '  "product_code": "产品代码/编号，无则空串",\n'
     '  "risk_level": "R1|R2|R3|R4|R5|低|中|高|未提及",\n'
-    '  "publish_date": "发布日期 YYYY-MM-DD，无法识别则空串"\n'
+    '  "publish_date": "发布日期 YYYY-MM-DD，无法识别则空串",\n'
+    '  "institution_name": "发布/管理该资料的金融机构名称，无则空串",\n'
+    '  "industry": "所属行业分类，如：银行/基金/保险/证券/信托，无则空串",\n'
+    '  "market": "涉及市场，如：A股/港股/美股/债券市场/黄金，无则空串",\n'
+    '  "entry_name": "资料条目/主题名称（用于检索溯源展示），无则空串"\n'
     "}\n\n"
     "【文档内容】\n{content}"
 )
@@ -37,7 +41,27 @@ _DEFAULT_META = {
     "product_code": "",
     "risk_level": "未提及",
     "publish_date": "",
+    # G-04：需求 §5 补齐全字段
+    "institution_name": "",
+    "industry": "",
+    "market": "",
+    "entry_name": "",
 }
+
+# doc_meta 中随 chunk 落库的全部结构化字段（动态字段，无需改 Milvus schema）
+_META_KEYS = (
+    "content_type",
+    "product_name",
+    "product_code",
+    "risk_level",
+    "publish_date",
+    "institution_name",
+    "industry",
+    "market",
+    "entry_name",
+    "source_file",
+    "source_path",
+)
 
 
 def _merge_doc_meta(state) -> dict:
@@ -45,29 +69,33 @@ def _merge_doc_meta(state) -> dict:
     doc_meta = dict(state.get("doc_meta") or {})
     raw_markdown = state.get("raw_markdown") or ""
     file_title = state.get("file_title", "")
+    # G-04：source_path 由入口阶段写入绝对路径，这里保留（不覆盖）
+    source_path = doc_meta.get("source_path", "")
 
-    # mock 或内容过短 -> 直接用默认值（保留已有 source_file）
+    # mock 或内容过短 -> 直接用默认值（保留已有 source_file/source_path）
     if lm_config.mock or not raw_markdown.strip():
         doc_meta.update(_DEFAULT_META)
+        doc_meta["source_path"] = source_path
         return {"doc_meta": doc_meta}
 
     # 仅取前若干字符做识别，控制 token 成本
     snippet = raw_markdown[:4000]
     try:
         chat_model = llm_provider.chat()
-        resp = chat_model.generate(_META_PROMPT.format(content=snippet + f"\n\n文件名提示：{file_title}"))
-        text = getattr(resp, "output", None)
-        if text is None and hasattr(resp, "choices"):
-            text = resp.choices[0].message.content
-        text = text or ""
+        resp = chat_model.invoke(_META_PROMPT.format(content=snippet) + f"\n\n文件名提示：{file_title}")
+        text = (getattr(resp, "content", "") or "")
         match = re.search(r"\{.*\}", text, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {}
-        for k in ("content_type", "product_name", "product_code", "risk_level", "publish_date"):
+        for k in _META_KEYS:
+            if k in ("source_file", "source_path"):
+                continue
             v = (parsed.get(k) or "").strip()
             doc_meta[k] = v
+        doc_meta["source_path"] = source_path
         logger.info(f"元数据识别完成：{ {k: doc_meta.get(k) for k in _DEFAULT_META} }")
     except Exception as e:
         logger.warning(f"元数据 LLM 识别失败，使用默认值: {e}")
         doc_meta.update(_DEFAULT_META)
+        doc_meta["source_path"] = source_path
 
     return {"doc_meta": doc_meta}

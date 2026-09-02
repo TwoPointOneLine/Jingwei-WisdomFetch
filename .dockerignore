@@ -1,25 +1,63 @@
-# 本 .dockerignore 针对 build context = ../backend（见 deploy/compose.yml）
-# 仅列出 backend 上下文内真正需要排除的项；根级 frontend/docs/logs 不在上下文，无需列。
+# ============================================================
+# 生效位置：build context = 仓库根
+#   （deploy/compose.yml: build.context = ..；cd.yml: docker build .）
+# ------------------------------------------------------------
+# Docker 只读取【构建上下文根】下的 .dockerignore。阶段 3 方案 B 将上下文
+# 由 backend/ 提升为仓库根后，本文件成为生效者；backend/.dockerignore 已删除，
+# 避免二者只生效其一造成误解。
+#
+# Dockerfile 位于 deploy/docker/*.Dockerfile，COPY 路径均为 backend/xxx，
+# 因此 backend/ 下的源码必须保留在上下文内。
+# ============================================================
 
-# 版本库 / 工具 / IDE（不进镜像）
+# 版本库 / 工具 / IDE
 .git
 .gitignore
-.codebuddy
 .idea
 .vscode
+.codebuddy
+.workbuddy
+.github
 
-# Python 缓存与构建产物（不进镜像）
+# Python 虚拟环境与缓存（体积最大，必须排除）
 .venv
+backend/.venv
+.uv-cache
 **/__pycache__
 **/*.pyc
 **/*.pyo
+**/*.pyd
+**/*.egg-info
 **/.pytest_cache
 **/.ruff_cache
-dist
-*.egg-info
+**/.mypy_cache
+**/.coverage
 
-# 文档子目录（backend 上下文内如有需排除的文档，列于此；当前 common 包无 docs 子目录）
+# 前端（后端镜像构建完全不需要前端源码）
+# 说明：当前 5 个后端 Dockerfile 均未 COPY 任何 frontend 路径，
+#       前端产物 frontend/dist 由 compose 以只读方式挂载进网关容器。
+#       若将来要把前端构建纳入镜像，需移除本条并改用多阶段构建。
+frontend
 
-# 注意：
-# - frontend/、docs/、logs/、output/、test/ 不在 backend 上下文内，无需忽略。
-# - run.bat / run_backend.bat / scripts/ 是启动与部署必需，保留进上下文。
+# 后端构建产物
+backend/dist
+backend/build
+
+# 运行期产物（日志 / 解析输出）
+backend/logs
+backend/output
+var
+**/*.log
+
+# 临时与一次性文件
+temp
+scripts
+*.origblob
+*.reranker
+
+# 文档（不进镜像）
+docs
+backend/docs
+
+# 本目录自身（避免把 .dockerignore 拷进上下文）
+.dockerignore

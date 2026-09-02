@@ -12,7 +12,12 @@
 
 前置条件：
     - Docker Desktop（或 docker + compose v2）
-    - 已复制 deploy/.env.example 为根目录 .env 并填入真实配置
+    - 已复制 deploy/env/.env.example 为【仓库根】.env 并填入真实配置
+    - 前端产物 frontend/dist 已构建（up 前会自动校验，缺失则提示执行 build）
+
+路径约定：
+    - 所有路径基准为仓库根（本文件位于 backend/scripts/，故取 parents[2]）
+    - .env / frontend/dist 在仓库根；deploy/compose.yml 在仓库根 deploy/ 下
 """
 from __future__ import annotations
 
@@ -24,10 +29,13 @@ import time
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-# 编排文件统一放在仓库根的 deploy/ 下（基础设施 docker-compose.yml + 五服务 compose.yml）
-# backend 为 uv workspace 根，deploy/ 在仓库根（backend 的上一级）
-COMPOSE_FILE = str(ROOT.parent / "deploy" / "compose.yml")
+# 本文件位于 backend/scripts/，故 parents[2] 才是仓库根（monorepo 根）。
+# 注意：backend/ 是 uv workspace 根，但 .env、frontend/、deploy/ 都在仓库根，
+# 路径基准必须统一为仓库根，否则 check_env / build_frontend 会指向 backend/ 下不存在的位置。
+ROOT = Path(__file__).resolve().parents[2]
+COMPOSE_FILE = str(ROOT / "deploy" / "compose.yml")
+FRONTEND_DIR = ROOT / "frontend"
+FRONTEND_DIST = FRONTEND_DIR / "dist"
 
 # 模块名 → compose 服务名
 SERVICES: dict[str, str] = {
@@ -69,30 +77,88 @@ def check_docker() -> None:
     _run(["docker", "compose", "-f", COMPOSE_FILE, "version"])
 
 
+# 9.2 弱口令 / 占位符黑名单：部署前拦截明显的示例凭据，避免生产环境用默认弱口令启动。
+_WEAK_VALUES = (
+    "shopkeeper123",
+    "your_dashscope_api_key",
+    "your_mineru_api_url",
+    "change_me",
+    "changeme",
+    "<",
+    "example",
+    "placeholder",
+)
+# 真正承载密钥、绝不允许为占位符/弱口令的键（按前缀粗匹配即可）。
+_SECRET_PREFIXES = (
+    "MONGO_PASSWORD",
+    "MINIO_SECRET_KEY",
+    "OPENAI_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "JWT_SECRET",
+)
+
+
 def check_env() -> None:
-    if not (ROOT / ".env").exists():
+    env_path = ROOT / ".env"
+    if not env_path.exists():
         raise SystemExit(
             "缺少根目录 .env 文件。请先执行：\n"
-            "  Windows:  copy deploy\\.env.example .env\n"
-            "  Linux:    cp deploy/.env.example .env\n"
-            "然后按需修改其中的 API Key / 模型路径等配置。"
+            "  Windows:  copy deploy\\env\\.env.example .env\n"
+            "  Linux:    cp deploy/env/.env.example .env\n"
+            "然后按需修改其中的 API Key / 模型路径等配置。\n"
+            "注意：位置必须是仓库根（本文件通过 env_file: [../.env] 引用）。"
+        )
+    # 9.2 凭据强度前置校验
+    raw = env_path.read_text(encoding="utf-8", errors="ignore")
+    violations: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if not key or not value:
+            continue
+        if any(value == w or value.lower().startswith(w) for w in _WEAK_VALUES):
+            # 仅当键名属于机密类或值确属明显占位时才报错
+            if any(key.startswith(p) for p in _SECRET_PREFIXES) or value in _WEAK_VALUES:
+                violations.append(f"{key}={value}")
+    if violations:
+        raise SystemExit(
+            "检测到 .env 中存在弱口令 / 未替换的占位符，禁止用于部署：\n  - "
+            + "\n  - ".join(violations)
+            + "\n请替换为真实强凭据后再执行部署。"
+        )
+
+
+def check_frontend_dist() -> None:
+    """校验前端产物已构建。
+
+    compose 以只读方式挂载仓库根 frontend/dist，目录不存在时 Docker 会静默创建空目录，
+    导致网关虽 healthy 但首页 404，故障现象与根因距离过远，故在此前置拦截。
+    """
+    if not (FRONTEND_DIST / "index.html").exists():
+        raise SystemExit(
+            f"未检测到前端产物：{FRONTEND_DIST / 'index.html'}\n"
+            "请先构建前端：\n"
+            "  pnpm --dir frontend install && pnpm --dir frontend build\n"
+            "或执行： python scripts/deploy.py build"
         )
 
 
 def build_frontend() -> None:
     """构建前端 dist（gateway 通过 compose 挂载托管）。"""
-    frontend = ROOT / "frontend"
-    if not (frontend / "package.json").exists():
-        raise SystemExit("frontend/package.json 不存在，无法构建前端。")
+    if not (FRONTEND_DIR / "package.json").exists():
+        raise SystemExit(f"{FRONTEND_DIR / 'package.json'} 不存在，无法构建前端。")
     pkg = shutil.which("pnpm") or shutil.which("npm")
     if pkg is None:
         raise SystemExit("未检测到 pnpm / npm，请先安装 Node.js 工具链。")
-    if pkg.endswith("pnpm") or pkg.endswith("pnpm.exe") or Path(pkg).name.lower().startswith("pnpm"):
-        _run([pkg, "--dir", str(frontend), "install"])
-        _run([pkg, "--dir", str(frontend), "build"])
+    if Path(pkg).name.lower().startswith("pnpm"):
+        _run([pkg, "--dir", str(FRONTEND_DIR), "install"])
+        _run([pkg, "--dir", str(FRONTEND_DIR), "build"])
     else:
-        _run([pkg, "--prefix", str(frontend), "install"])
-        _run([pkg, "--prefix", str(frontend), "run", "build"])
+        _run([pkg, "--prefix", str(FRONTEND_DIR), "install"])
+        _run([pkg, "--prefix", str(FRONTEND_DIR), "run", "build"])
 
 
 def build(services: list[str], frontend: bool) -> None:
@@ -108,6 +174,7 @@ def up(services: list[str], build_flag: bool) -> None:
     check_docker()
     if build_flag:
         build(services, frontend=True)
+    check_frontend_dist()
     targets = _resolve_services(services)
     _run(["docker", "compose", "-f", COMPOSE_FILE, "up", "-d"] + targets)
     health(wait=120)

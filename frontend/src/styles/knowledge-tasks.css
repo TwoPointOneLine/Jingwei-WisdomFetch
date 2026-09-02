@@ -1,0 +1,262 @@
+/* ======================= 知识库管理 · 导入任务 ======================= */
+/* 任务卡片 / 状态徽章 / 进度条 / 处理节点 chips / 失败重试
+ *
+ * 注意：.task / .task-head / .task-fname / .node-progress / .node-chip 存在
+ * 「早期版 → 重设计版」两组定义，靠后的重设计版覆盖靠前的早期版。
+ * 同组定义必须留在同一文件内，勿跨文件拆分。
+ */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ───── 早期版（被下方重设计版覆盖，勿删：部分属性仍生效） ───── */
+.task {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--card);
+}
+.task-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.task-fname {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+}
+.status-PROCESSING {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.status-COMPLETED {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.status-FAILED {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.status-PENDING {
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+.node-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.node-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+.node-chip.done {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.node-chip.running {
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 600;
+  animation: pulse 1.2s infinite;
+}
+
+/* ───── 重设计版 ───── */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.task {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px 14px 19px;
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.2s ease, opacity 0.25s ease;
+  animation: kb-card-in 0.3s ease backwards;
+}
+/* 左侧状态导轨：按任务状态着色，一眼区分进行中 / 成功 / 失败 */
+.task::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border);
+  transition: background 0.25s ease;
+}
+.task:has(.status-PROCESSING)::before { background: linear-gradient(180deg, var(--warning), #F0B95C); }
+.task:has(.status-COMPLETED)::before { background: var(--success); }
+.task:has(.status-FAILED)::before { background: var(--danger); }
+.task:has(.status-PENDING)::before { background: #cbd5e1; }
+.task:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(27, 42, 78, 0.08);
+}
+/* 已完成任务淡出层级：降低存在感，让进行中 / 失败任务更突出 */
+.task:has(.status-COMPLETED) {
+  opacity: 0.72;
+}
+.task:has(.status-COMPLETED):hover {
+  opacity: 1;
+}
+.task-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.task-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.task-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--primary-light, #E8EDF5);
+  color: var(--primary, #1B2A4E);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.task-fname {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-id {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.task-progress {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.task-progress-bar {
+  height: 100%;
+  border-radius: 9px;
+  transition: width 0.4s ease;
+}
+.task-progress-bar.status-PROCESSING {
+  background: linear-gradient(90deg, var(--warning), #F0B95C);
+  background-size: 200% 100%;
+  animation: kb-progress-shimmer 1.6s linear infinite;
+}
+.task-progress-bar.status-COMPLETED {
+  background: var(--success);
+}
+.task-progress-bar.status-FAILED {
+  background: var(--danger);
+}
+.task-progress-bar.status-PENDING {
+  background: #cbd5e1;
+}
+@keyframes kb-progress-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.task-progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+
+.node-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.node-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  text-transform: lowercase;
+}
+.node-chip.done {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: transparent;
+}
+.node-chip.running {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: transparent;
+  font-weight: 600;
+  animation: pulse 1.2s infinite;
+}
+
+/* 失败原因 + 重试 */
+.task-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  background: var(--danger-bg);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.err-msg {
+  color: #b91c1c;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+}

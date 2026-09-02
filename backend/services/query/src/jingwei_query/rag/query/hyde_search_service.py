@@ -5,6 +5,7 @@ HyDE（Hypothetical Document Embedding）针对问句过短、语义稀疏、意
 通过生成一段"理想的假设答案"作为检索输入，增强查询语义表达，弥补原生问句信息量不足导致的漏召。
 """
 from jingwei_common.ai.providers import llm_provider
+from jingwei_common.config import rag_config
 from jingwei_common.config.lm_config import lm_config
 from jingwei_common.logging import logger
 
@@ -40,7 +41,7 @@ def hyde_retrieve(state) -> dict:
         hits = chunks_store.hybrid_search(
             query_dense=query_dense,
             query_sparse=query_sparse,
-            top_k=10,
+            top_k=rag_config.retrieval_top_k,
             rerank="rrf",
             filter_expr=filter_expr,
         )

@@ -29,6 +29,12 @@ class QueryGraphState(TypedDict):
     item_name: str
     model: str
     rephrased_query: str
+    # ── 多轮上下文（FR-QA-07 / G-03）──────────────────────────
+    # history：原始消息列表；history_text：裁剪后可直接注入 prompt 的文本
+    # history_turns：注入作答 prompt 的轮数（由 rag_config 传入）
+    history: Annotated[list, _last_write_wins]
+    history_text: Annotated[str, _last_write_wins]
+    history_turns: int
     keywords: Annotated[list, _last_write_wins]
     vector_documents: Annotated[list, _last_write_wins]
     hyde_documents: Annotated[list, _last_write_wins]

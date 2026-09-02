@@ -1,11 +1,26 @@
 name: CI
 
+# 注意：仓库根 pyproject.toml 不声明 uv workspace，Python 工程根是 backend/。
+# 所有 uv / pytest / ruff 命令必须显式指定 working-directory: backend，否则会在仓库根执行并失败。
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 jobs:
+  # 仓库整洁性契约：Dockerfile COPY 源存在、env 模板无重复键/无死变量、
+  # 构建上下文关键文件未被 .dockerignore 误排除。防止目录整洁性再次腐化。
+  layout:
+    name: Layout contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 运行整洁性契约检查
+        run: python scripts/checks/run_all.py
+
   lint:
     name: Lint (ruff + lock)
     runs-on: ubuntu-latest
@@ -19,8 +34,10 @@ jobs:
           python-version: "3.11"
       - name: 校验 uv.lock 一致性
         run: uv lock --check
+        working-directory: backend
       - name: ruff 检查 packages / services
         run: uv run ruff check packages services
+        working-directory: backend
 
   test:
     name: Python tests
@@ -35,10 +52,13 @@ jobs:
           python-version: "3.11"
       - name: 安装全部 workspace 依赖
         run: uv sync --all-packages --no-dev
+        working-directory: backend
       - name: common 单测
         run: uv run pytest packages/common/tests -q
+        working-directory: backend
       - name: 服务单测（gateway/auth/user/knowledge/query）
         run: uv run pytest services/gateway/tests services/auth/tests services/user/tests services/knowledge/tests services/query/tests -q
+        working-directory: backend
 
   frontend:
     name: Frontend (tsc + build + lint)
@@ -71,12 +91,63 @@ jobs:
           python-version: "3.11"
       - name: 构建五服务 wheel/sdist
         run: |
+          set -euo pipefail
           uv sync --all-packages --no-dev
           uv build --package jingwei-common
           for pkg in jingwei-gateway jingwei-auth jingwei-user jingwei-knowledge jingwei-query; do
             uv build --package "$pkg"
           done
+        working-directory: backend
       - uses: actions/upload-artifact@v4
         with:
+          # 产物生成在 backend/dist/（uv build 输出目录相对工程根）
           name: wheels
-          path: dist/
+          path: backend/dist/
+
+  # 9.2 密钥与合规：对全历史 + 增量做 gitleaks 扫描，PR 合并前拦截凭据泄露
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 需要完整历史供 gitleaks 检测历史引入点
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  # 9.2 依赖供应链审计（观察期：发现问题先暴露不阻断，待清零后转 required）
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.0"
+      - name: Python 依赖审计 (pip-audit)
+        run: |
+          set -euo pipefail
+          uv export --frozen --no-dev --format requirements-txt > /tmp/reqs.txt 2>/dev/null || true
+          if [ -s /tmp/reqs.txt ]; then
+            pip install pip-audit >/dev/null 2>&1 || true
+            pip-audit -r /tmp/reqs.txt -f json -o /tmp/py-audit.json || true
+          fi
+          echo "python audit done"
+        working-directory: backend
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: 前端依赖审计 (pnpm audit)
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile || true
+            pnpm audit --json > /tmp/fe-audit.json || true
+          fi
+          echo "frontend audit done"
+        working-directory: frontend

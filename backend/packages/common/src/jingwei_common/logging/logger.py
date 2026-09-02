@@ -21,7 +21,7 @@ from functools import wraps
 
 from loguru import logger
 
-from jingwei_common.config.common import PROJECT_ROOT, env_bool, env_str
+from jingwei_common.config.common import LOG_DIR, env_bool, env_str
 
 # -------------------------- 读取 .env 配置（带默认值，防止配置缺失） --------------------------
 LOG_CONSOLE_ENABLE = env_bool("LOG_CONSOLE_ENABLE", True)
@@ -30,8 +30,9 @@ LOG_FILE_ENABLE = env_bool("LOG_FILE_ENABLE", True)
 LOG_FILE_LEVEL = env_str("LOG_FILE_LEVEL", "INFO").upper()
 LOG_FILE_RETENTION = env_str("LOG_FILE_RETENTION", "7 days")
 
-# -------------------------- 定义日志路径（自动推导项目根） --------------------------
-LOG_DIR = PROJECT_ROOT / "logs"
+# -------------------------- 定义日志路径 --------------------------
+# 目录来自 jingwei_common.config.common.LOG_DIR（默认 <仓库根>/var/log，
+# 可用环境变量 JINGWEI_LOG_DIR 覆盖）。已 gitignore，不再与源码混放。
 LOG_FILE_NAME = "app_{time:YYYYMMDD}.log"
 LOG_FILE_PATH = str(LOG_DIR / LOG_FILE_NAME)
 
@@ -85,6 +86,7 @@ def init_logger():
             format=LOG_FORMAT,
             rotation="00:00",
             retention=LOG_FILE_RETENTION,
+            compression="zip",   # 轮转后压缩归档，避免日志占满磁盘
             encoding="utf-8",
             enqueue=True,
             backtrace=True,

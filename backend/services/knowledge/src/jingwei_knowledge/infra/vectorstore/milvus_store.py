@@ -11,6 +11,7 @@ from jingwei_common.config.embedding_config import embedding_config
 from jingwei_common.config.milvus_config import milvus_config
 from jingwei_common.constants import (
     COLLECTION_KNOWLEDGE_ITEMS,
+    DEFAULT_KB,
     ROLE_ADMIN,
     VIS_PRIVATE,
     VIS_SHARED,
@@ -18,9 +19,8 @@ from jingwei_common.constants import (
 )
 from jingwei_common.logging import logger, step_log
 from pymilvus import (
+    AnnSearchRequest,
     DataType,
-    Function,
-    FunctionType,
     RRFRanker,
     WeightedRanker,
 )
@@ -39,6 +39,7 @@ class MilvusStore:
         client = milvus_client.client
         if client.has_collection(self.collection):
             logger.info(f"集合已存在: {self.collection}")
+            self.ensure_ready()
             return
         logger.info(f"创建集合: {self.collection} (dim={self.dim})")
         from pymilvus import CollectionSchema, FieldSchema
@@ -50,22 +51,34 @@ class MilvusStore:
             FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=1024),
             FieldSchema(name="file_title", dtype=DataType.VARCHAR, max_length=1024),
             FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=self.dim),
-            # BM25 函数输出字段（稀疏向量），必须与 Function 的 output_field_names 对应
+            # 稀疏向量：由导入链用 BGE-M3 lexical_weights 客户端生成后写入
+            # （注意：部署的 Milvus 为 2.4.x，不支持 BM25 Function，故不使用服务端函数生成）
             FieldSchema(name="sparse", dtype=DataType.SPARSE_FLOAT_VECTOR),
         ]
-        schema = CollectionSchema(
-            fields,
-            enable_dynamic_field=True,
-            functions=[
-                Function(
-                    name="bm25",
-                    input_field_names=["content"],
-                    output_field_names="sparse",
-                    function_type=FunctionType.BM25,
-                )
-            ],
-        )
+        schema = CollectionSchema(fields, enable_dynamic_field=True)
         client.create_collection(collection_name=self.collection, schema=schema)
+        self.ensure_ready()
+
+    def ensure_ready(self):
+        """确保集合已建向量索引并处于 loaded 状态（幂等）。
+
+        Milvus 的 query/search 均要求集合已加载，而 load 又要求向量字段先建索引。
+        历史版本 create_collection 后未建索引，导致集合永远 NotLoad、
+        /documents 列表与 chunk_id 回填报 collection not loaded / index not found。
+        """
+        client = milvus_client.client
+        if not client.has_collection(self.collection):
+            return
+        try:
+            if not client.list_indexes(self.collection):
+                ip = client.prepare_index_params()
+                ip.add_index(field_name="dense_vector", index_type="AUTOINDEX", metric_type="IP")
+                ip.add_index(field_name="sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="IP")
+                client.create_index(self.collection, index_params=ip)
+                logger.info(f"为集合 {self.collection} 补建稠密/稀疏向量索引")
+            client.load_collection(self.collection)
+        except Exception as e:
+            logger.warning(f"集合 {self.collection} 索引/加载失败: {e}")
 
     def drop_collection(self):
         client = milvus_client.client
@@ -89,7 +102,13 @@ class MilvusStore:
         milvus_client.client.flush(self.collection)
 
     # ---------------------- 资料级管理（FR-IMP-05 下线/版本管理） ----------------------
-    def list_items(self, owner: str | None = None, role: str | None = None, team_id: str = "") -> list[dict]:
+    def list_items(
+        self,
+        owner: str | None = None,
+        role: str | None = None,
+        team_id: str = "",
+        kb_name: str = "",
+    ) -> list[dict]:
         """列出已导入资料（按 item_name 聚合，含 chunk 数与来源文件名）。
 
         owner/role/team_id 用于隔离（多级）：
@@ -105,8 +124,8 @@ class MilvusStore:
         # 1) 从 Milvus 聚合 chunk 维度（数量、来源、结构化字段）
         res = client.query(
             self.collection,
-            expr="item_name != ''",
-            output_fields=["item_name", "source_file", "product_name", "publish_date"],
+            filter="item_name != ''",
+            output_fields=["item_name", "source_file", "product_name", "publish_date", "kb_name"],
             limit=10_000,
         )
         agg: dict[str, dict] = {}
@@ -120,6 +139,7 @@ class MilvusStore:
                     "source_files": set(),
                     "product_name": r.get("product_name", ""),
                     "publish_date": r.get("publish_date", ""),
+                    "kb_name": r.get("kb_name") or DEFAULT_KB,
                     "owner": "",
                     "visibility": VIS_PRIVATE,
                     "team_id": "",
@@ -134,13 +154,14 @@ class MilvusStore:
         meta: dict[str, dict] = {}
         try:
             docs = mongo_client.get_collection(COLLECTION_KNOWLEDGE_ITEMS).find(
-                {}, {"item_name": 1, "owner": 1, "visibility": 1, "team_id": 1}
+                {}, {"item_name": 1, "owner": 1, "visibility": 1, "team_id": 1, "kb_name": 1}
             )
             for d in docs:
                 meta[d["item_name"]] = {
                     "owner": d.get("owner", ""),
                     "visibility": d.get("visibility", VIS_PRIVATE),
                     "team_id": d.get("team_id", ""),
+                    "kb_name": d.get("kb_name") or DEFAULT_KB,
                 }
         except Exception as e:
             logger.warning(f"读取资料元信息失败（使用 Milvus 默认）: {e}")
@@ -152,7 +173,11 @@ class MilvusStore:
                 e["owner"] = m["owner"]
                 e["visibility"] = m["visibility"]
                 e["team_id"] = m["team_id"]
+                e["kb_name"] = m["kb_name"]
             e["source_files"] = sorted(e["source_files"])
+            # 知识库（逻辑库）过滤：仅返回指定库的资料
+            if kb_name and e.get("kb_name") != kb_name:
+                continue
             # 隔离过滤（多级）：本人 / 共享 / 同团队
             if owner and role != ROLE_ADMIN:
                 accessible = (
@@ -199,7 +224,7 @@ class MilvusStore:
         client = milvus_client.client
         if not client.has_collection(self.collection):
             return 0
-        res = client.delete(self.collection, expr=f'item_name == "{item_name}"')
+        res = client.delete(self.collection, filter=f'item_name == "{item_name}"')
         deleted = res.get("delete_count", 0) if isinstance(res, dict) else 0
         # 同步清理 Mongo 资料元信息
         try:
@@ -225,18 +250,49 @@ class MilvusStore:
         :return: [{chunk_id, content, score, ...meta}]
         """
         client = milvus_client.client
-        ranker = RRFRanker() if rerank == "rrf" else WeightedRanker(0.7, 0.3)
-        results = client.hybrid_search(
-            collection_name=self.collection,
-            ann_fields=["dense_vector"],
-            sparse_vector_fields=["sparse"],
-            sparse_data=[query_sparse],
-            dense_data=[query_dense],
-            ranker=ranker,
-            limit=top_k,
-            filter=filter_expr,
-            output_fields=["chunk_id", "content", "item_name", "title", "file_title"],
-        )
+        # 稀疏向量为空（如 Ollama BGE-M3 仅返回稠密）时降级为纯稠密检索
+        if not query_sparse:
+            results = client.search(
+                collection_name=self.collection,
+                data=[query_dense],
+                anns_field="dense_vector",
+                search_params={"metric_type": "IP", "params": {}},
+                limit=top_k,
+                filter=filter_expr or "",
+                output_fields=["chunk_id", "content", "item_name", "title", "file_title"],
+            )
+        else:
+            # pymilvus 3.x：hybrid_search 需显式构造 AnnSearchRequest 列表；
+            # 稀疏向量需 {int: float} 字典形式（embedding 层产出 [{"id","weight"}]）
+            ranker = RRFRanker() if rerank == "rrf" else WeightedRanker(0.7, 0.3)
+            sparse_data = [
+                {int(d["id"]): float(d["weight"]) for d in query_sparse}
+                if query_sparse and isinstance(query_sparse[0], dict) and "id" in query_sparse[0]
+                else query_sparse
+            ]
+            reqs = [
+                AnnSearchRequest(
+                    data=[query_dense],
+                    anns_field="dense_vector",
+                    param={"metric_type": "IP", "params": {}},
+                    limit=top_k,
+                    filter=filter_expr or "",
+                ),
+                AnnSearchRequest(
+                    data=sparse_data,
+                    anns_field="sparse",
+                    param={"metric_type": "IP", "params": {}},
+                    limit=top_k,
+                    filter=filter_expr or "",
+                ),
+            ]
+            results = client.hybrid_search(
+                collection_name=self.collection,
+                reqs=reqs,
+                ranker=ranker,
+                limit=top_k,
+                output_fields=["chunk_id", "content", "item_name", "title", "file_title"],
+            )
         hits = results[0] if results else []
         return [
             {

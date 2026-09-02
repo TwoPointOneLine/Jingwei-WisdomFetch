@@ -5,6 +5,7 @@ BGE-Reranker 重排序封装。
 """
 from typing import Any
 
+from jingwei_common.ai._flagembedding_compat import ensure_flagembedding_importable
 from jingwei_common.config.reranker_config import reranker_config
 from jingwei_common.logging import logger
 
@@ -17,11 +18,16 @@ class BGEReranker:
     @classmethod
     def get_model(cls):
         if cls._model is None:
-            from FlagEmbedding import FlagReranker
+            ensure_flagembedding_importable()
+            from FlagEmbedding.inference.reranker import FlagReranker
+
+            from pathlib import Path
 
             logger.info(
-                f"初始化 BGE-Reranker: path={reranker_config.bge_reranker_large}, "
-                f"device={reranker_config.bge_reranker_device}, fp16={reranker_config.bge_reranker_fp16}"
+                "初始化 BGE-Reranker: 模型=%s, 设备=%s, fp16=%s",
+                Path(reranker_config.bge_reranker_large).name,
+                reranker_config.bge_reranker_device,
+                reranker_config.bge_reranker_fp16,
             )
             cls._model = FlagReranker(
                 model_name_or_path=reranker_config.bge_reranker_large,

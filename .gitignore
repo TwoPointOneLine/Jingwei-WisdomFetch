@@ -35,10 +35,21 @@ dist/
 # ===== 输出目录（运行期生成，如需保留生成结果可删除本行）=====
 output/
 
+# ===== 运行期产物根目录（阶段4 迁移目标：var/log、var/output）=====
+var/
+
+# ===== 临时目录（一次性排查、草稿）=====
+temp/
+
+# ===== 一次性修复残留（非源码，勿入库）=====
+*.origblob
+*.reranker
+
 # ===== IDE / 助手工具数据 =====
 .idea/
 .vscode/
 .codebuddy/
+.workbuddy/
 *.swp
 *.swo
 
@@ -47,8 +58,14 @@ output/
 Thumbs.db
 desktop.ini
 
-# ===== uv 本地缓存（uv.lock 需提交，不要忽略）=====
+# ===== uv 本地缓存 =====
 .uv-cache/
+
+# ===== 根级虚锁 =====
+# 根目录不是 uv workspace 根，uv 会把根当作 virtual root 并生成仅 5 行的 uv.lock
+# （139B），与真正的依赖锁 backend/uv.lock 同名并存，极易误判。
+# 真实依赖锁是 backend/uv.lock —— 必须提交，此处仅忽略【根级】那一份。
+/uv.lock
 
 # ===== 文档 =====
 # 注意：docs/ 为正式产品/需求/架构文档，必须纳入版本库，切勿忽略。

@@ -1,0 +1,910 @@
+/* ======================= 知识库管理 · 资料展示 ======================= */
+/* 资料区头部 / 分组 / 列表行（doc-item）/ 书架式书本封面卡片 / 空状态 */
+
+.kb-docs {
+  width: 100%;
+}
+.kb-docs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.kb-docs-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.kb-docs-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.kb-docs-title-icon {
+  font-size: 16px;
+}
+.kb-docs-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.kb-tabs {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.kb-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kb-tab:hover {
+  color: var(--text);
+}
+.kb-tab.active {
+  background: var(--card);
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(27, 42, 78, 0.1);
+}
+.kb-tab-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.kb-tab:not(.active) .kb-tab-num {
+  background: var(--card);
+  color: var(--text-muted);
+}
+
+/* 列表式资料行 */
+.kb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 按知识库分组折叠 */
+.kb-group {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--card, #FFFFFF);
+  box-shadow: 0 1px 2px rgba(27, 42, 78, 0.04), 0 2px 8px rgba(27, 42, 78, 0.04);
+}
+.kb-group + .kb-group {
+  margin-top: 12px;
+}
+.kb-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, var(--bg, #F5F7FA) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border);
+}
+/* 分组头部悬停：图标轻微上浮，强化可交互感 */
+.kb-group-head:hover .kb-group-icon {
+  transform: translateY(-1px) scale(1.05);
+}
+.kb-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--primary-light, #E8ECF5);
+  color: var(--primary, #1B2A4E);
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+.kb-group-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+.kb-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.kb-group-head .kb-group-count {
+  margin-left: auto;
+}
+.kb-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.kb-group-body .doc-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.kb-empty-sm {
+  padding: 14px 8px;
+}
+.kb-empty-sm .kb-empty-desc {
+  margin: 0;
+  text-align: center;
+}
+.doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  transition: all 0.15s;
+}
+.doc-item:hover {
+  border-color: var(--primary);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(27, 42, 78, 0.06);
+}
+.doc-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.doc-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.doc-line1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.doc-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.doc-files {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.doc-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+  margin-top: 2px;
+}
+.doc-actions .btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.btn.danger-ghost {
+  border: 1px solid #fecaca;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn.danger-ghost:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.12);
+}
+.btn.danger-ghost:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn.danger-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 他人资料只读提示 */
+.doc-readonly {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* ===== 书架式书本封面展示 ===== */
+@keyframes kb-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.book-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  gap: 18px 14px;
+  padding: 4px;
+}
+.book-card {
+  position: relative; /* 批量模式复选框的定位上下文 */
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  background: var(--card, #FFFFFF);
+  box-shadow: 0 1px 2px rgba(27, 42, 78, 0.04), 0 4px 14px rgba(27, 42, 78, 0.05);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  animation: kb-card-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) backwards;
+}
+/* 入场交错：前 8 张依次延迟，营造书架逐本浮现的节奏感 */
+.book-card:nth-child(2) { animation-delay: 0.04s; }
+.book-card:nth-child(3) { animation-delay: 0.08s; }
+.book-card:nth-child(4) { animation-delay: 0.12s; }
+.book-card:nth-child(5) { animation-delay: 0.16s; }
+.book-card:nth-child(6) { animation-delay: 0.2s; }
+.book-card:nth-child(7) { animation-delay: 0.24s; }
+.book-card:nth-child(8) { animation-delay: 0.28s; }
+.book-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(200, 155, 60, 0.5);
+  box-shadow: 0 10px 26px rgba(27, 42, 78, 0.14);
+}
+/* 书本封面（带书脊阴影，模拟立体感） */
+.book-cover {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  box-shadow:
+    -3px 0 0 rgba(0, 0, 0, 0.2),
+    3px 4px 12px rgba(27, 42, 78, 0.24);
+  overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+  cursor: pointer;
+}
+.book-card:hover .book-cover {
+  transform: translateY(-3px) rotateX(2deg);
+  box-shadow:
+    -3px 0 0 rgba(0, 0, 0, 0.24),
+    5px 12px 26px rgba(27, 42, 78, 0.38);
+}
+/* 键盘可达性：封面为 role=button，聚焦时给出清晰描边 */
+.book-cover:focus-visible {
+  outline: 2px solid var(--gold, #C89B3C);
+  outline-offset: 2px;
+}
+/* 书脊（左侧高光条） */
+.book-spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 100%;
+  opacity: 0.92;
+  border-radius: 0;
+}
+/* 封面顶部光泽，增强立体感 */
+.book-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2) 0%, transparent 45%);
+}
+.book-cover-inner {
+  position: absolute;
+  inset: 0;
+  padding: 14px 12px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+}
+.book-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #fff;
+  line-height: 1;
+}
+.book-emoji svg { display: block; }
+.book-title {
+  margin-top: 11px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.38;
+  letter-spacing: 0.2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  word-break: break-word;
+}
+.book-rule {
+  width: 30px;
+  height: 2px;
+  border-radius: 2px;
+  margin: 12px 0 10px;
+  opacity: 0.95;
+}
+.book-author {
+  margin-top: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  opacity: 0.88;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+/* 封面右上角可见性徽标（白底，保证在深色封面上清晰） */
+.book-cover .vis-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #1b2a4e;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.book-cover .vis-badge.vis-shared {
+  color: #6b4e10;
+  background: var(--gold);
+}
+.book-cover .vis-badge.vis-team {
+  color: #fff;
+  background: #2E7D4F;
+}
+.book-cover .vis-badge.vis-private {
+  color: #1b2a4e;
+  background: #cdd8ec;
+}
+/* 封面底部信息条 */
+.book-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 2px;
+}
+.book-foot-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  min-height: 17px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 1px;
+}
+.book-foot-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--sidebar-hover-bg, rgba(27, 42, 78, 0.06));
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.book-card:hover .book-foot-meta span {
+  border-color: rgba(200, 155, 60, 0.18);
+}
+.book-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  align-items: stretch;
+}
+.book-actions .btn,
+.book-actions .doc-readonly {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  letter-spacing: 0.2px;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.book-actions .book-action-btn {
+  min-width: 0;
+}
+.book-actions .book-action-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-actions .btn.ghost:hover {
+  background: var(--primary-light, #E8ECF5);
+  border-color: var(--primary-light, #C8D0E0);
+  color: var(--primary, #1B2A4E);
+}
+.book-actions .doc-readonly {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  background: var(--sidebar-hover-bg, rgba(27, 42, 78, 0.06));
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+/* 空书架占位：「添加知识」书本卡片——与书架知识书卡同款封面规格 */
+.empty-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  gap: 18px 14px;
+  padding: 4px;
+}
+.empty-shelf .book-card {
+  width: 100%;
+  max-width: 150px;
+}
+.add-book-card {
+  padding: 9px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--card, #FFFFFF);
+  /* 虚线外框仅用于区分「添加」入口，其余与 .book-card 一致 */
+  border: 1px dashed var(--border, #e2e8f0);
+  animation: kb-card-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) backwards;
+}
+.add-book-card:hover {
+  border-color: var(--gold, #C89B3C);
+}
+/* 封面与书封色板主色同款渐变，金色书脊 / 分隔线，左对齐排版 */
+.add-book-cover {
+  background: linear-gradient(135deg, #1B2A4E 0%, #2C3E66 100%);
+  color: #fff;
+}
+.add-book-cover .book-spine {
+  background: var(--gold, #C89B3C);
+}
+.add-book-cover .book-rule {
+  background: var(--gold, #C89B3C);
+}
+.add-book-cover .book-author {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== 批量操作模式 ===== */
+/* 卡片左上角复选框（自绘方框，隐藏原生 input 以保证跨浏览器一致） */
+.book-check {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 3;
+  display: inline-flex;
+  cursor: pointer;
+}
+/* 重要：input 必须铺满整个 label 区域以便直接接收点击。
+ * 若设为 width/height: 0，则只能依赖 label 的转发行为，在 React 合成事件下不可靠，
+ * 会导致 onChange 不触发、批量按钮始终 disabled。 */
+.book-check input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.book-check-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--gold, #C89B3C);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.book-check:hover .book-check-box {
+  background: var(--gold-light, #FDF6E8);
+  transform: scale(1.06);
+}
+/* 选中态：金色实心 + 白色对勾，与批量栏「全选」复选框一致 */
+.book-check input:checked + .book-check-box,
+.batch-select-all input:checked + .book-check-box {
+  background: linear-gradient(135deg, var(--gold, #C89B3C) 0%, #b08528 100%);
+  border-color: var(--gold, #C89B3C);
+}
+.book-check input:focus-visible + .book-check-box {
+  outline: 2px solid var(--primary, #1B2A4E);
+  outline-offset: 2px;
+}
+.book-check.disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+/* 批量模式下卡片可点选，选中态加金色描边 */
+.book-card.selectable .book-cover {
+  cursor: pointer;
+}
+.book-card.selected {
+  border-color: var(--gold, #C89B3C);
+  box-shadow: 0 6px 20px rgba(200, 155, 60, 0.28);
+}
+.book-card.selected .book-cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(200, 155, 60, 0.18);
+}
+
+/* 批量操作栏：资料区在批量模式下已清零内边距，此处直接占满整行，
+ * 无圆角、保留卡片底色与边框，清晰可见且与头部标题区视觉连续。 */
+.batch-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 0 0 10px;
+  padding: 12px 24px;
+  border: none;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  border-radius: 0;
+  background: linear-gradient(180deg, var(--card, #FFFFFF) 0%, var(--bg, #F5F7FA) 140%);
+  box-shadow: 0 2px 10px rgba(27, 42, 78, 0.05);
+}
+.batch-select-all {
+  position: relative; /* 内部 absolute input 的定位上下文 */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #1e293b);
+  user-select: none;
+}
+/* 同 .book-check input：铺满以便直接接收点击（含「全选」文字区域） */
+.batch-select-all input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.batch-count {
+  font-size: 12.5px;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+}
+.batch-count b {
+  color: var(--primary, #1B2A4E);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.batch-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: var(--sidebar-hover-bg, rgba(27, 42, 78, 0.06));
+}
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 9px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(27, 42, 78, 0.05);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease, border-color 0.15s ease;
+}
+.batch-btn:hover:not(:disabled) {
+  border-color: var(--primary, #1B2A4E);
+  box-shadow: 0 3px 10px rgba(27, 42, 78, 0.12);
+}
+.batch-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(27, 42, 78, 0.08);
+}
+.batch-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.batch-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border, #e2e8f0);
+  margin: 0 2px;
+}
+.batch-kb-select {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  border-radius: 9px;
+  max-width: 160px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--card, #FFFFFF);
+  color: var(--text, #1e293b);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.batch-kb-select:hover:not(:disabled) {
+  border-color: var(--primary, #1B2A4E);
+}
+.batch-kb-select:focus-visible {
+  outline: none;
+  border-color: var(--primary, #1B2A4E);
+  box-shadow: 0 0 0 3px rgba(27, 42, 78, 0.12);
+}
+/* 浏览器默认 select 无 placeholder，空值时降低对比度以提示 */
+.batch-kb-select:invalid,
+.batch-kb-select option[value=''] {
+  color: var(--text-muted, #64748b);
+}
+
+/* 头部「批处理操作」按钮 */
+.batch-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.05s ease;
+}
+.batch-toggle-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.batch-toggle-btn.active {
+  background: var(--gold-light, #FDF6E8);
+  border-color: var(--gold, #C89B3C);
+  color: #6b4e10;
+}
+
+/* 批量操作成功回执（绿色提示条） */
+.kb-inline-ok {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--success-bg, #E3F1E8);
+  border: 1px solid rgba(46, 125, 79, 0.25);
+  border-left: 3px solid var(--success, #2E7D4F);
+  color: var(--success, #2E7D4F);
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: 0 2px 8px rgba(46, 125, 79, 0.08);
+  animation: kb-banner-in 0.22s ease;
+}
+.kb-inline-ok .btn {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: var(--card);
+  border-color: rgba(46, 125, 79, 0.35);
+  color: var(--success, #2E7D4F);
+}
+.kb-inline-ok .btn:hover {
+  background: var(--success, #2E7D4F);
+  border-color: var(--success, #2E7D4F);
+  color: #fff;
+}
+
+/* 通用空状态占位 */
+.kb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 60px 24px;
+  text-align: center;
+  border: 1px dashed var(--border, #e2e8f0);
+  border-radius: 16px;
+  background: var(--card, #FFFFFF);
+  box-shadow: 0 1px 3px rgba(27, 42, 78, 0.04);
+}
+.kb-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--sidebar-hover-bg, rgba(27, 42, 78, 0.06)) 0%, rgba(200, 155, 60, 0.08) 100%);
+  color: var(--primary, #1B2A4E);
+  margin-bottom: 12px;
+  box-shadow: 0 4px 14px rgba(27, 42, 78, 0.08);
+}
+.kb-empty-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text, #1e293b);
+  letter-spacing: 0.2px;
+}
+.kb-empty-desc {
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+  line-height: 1.65;
+  max-width: 340px;
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .book-shelf {
+    grid-template-columns: repeat(auto-fill, minmax(134px, 1fr));
+    gap: 16px 12px;
+  }
+  /* 操作栏占满整行，避免与统计信息挤在一行导致换行错乱 */
+  .batch-bar .batch-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+@media (max-width: 720px) {
+  .book-shelf {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  }
+  .book-card {
+    padding: 7px;
+    gap: 8px;
+  }
+  .book-title { font-size: 13.5px; }
+  .book-actions .btn,
+  .book-actions .doc-readonly { font-size: 11px; padding: 4px 7px; }
+}
+/* ≤540px：切换为「横向书封 + 右侧信息」列表视图，给操作按钮留足横向空间 */
+@media (max-width: 540px) {
+  .book-shelf {
+    grid-template-columns: 1fr;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+  .book-card {
+    flex-direction: row;
+    gap: 12px;
+    padding: 9px;
+  }
+  .book-card .book-cover {
+    width: 84px;
+    flex: none;
+    aspect-ratio: 3 / 4;
+  }
+  .book-card .book-foot {
+    flex: 1;
+    min-width: 0;
+  }
+  .book-author { display: none; } /* 列表视图的封面过窄，隐藏上传者避免挤压标题 */
+}
+@media (max-width: 540px) {
+  /* 窄屏：批量操作栏按组换行，按钮等分宽度便于点按 */
+  .batch-bar {
+    padding: 10px 12px;
+    gap: 8px 10px;
+  }
+  .batch-actions {
+    gap: 5px;
+  }
+  .batch-btn {
+    flex: 1;
+    min-width: 88px;
+    justify-content: center;
+  }
+  .batch-divider {
+    display: none;
+  }
+  .batch-kb-select {
+    max-width: none;
+    width: 100%;
+  }
+}
+@media (max-width: 380px) {
+  .book-shelf { max-width: 100%; }
+  .book-card { padding: 7px; gap: 10px; }
+}

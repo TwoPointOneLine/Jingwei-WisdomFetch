@@ -35,12 +35,19 @@ def parse_pdf_to_markdown(state) -> dict:
             processor_list=None,
         )
         rendered = converter(pdf_path)
-        raw_markdown = text_from_rendered(rendered)
+        out = text_from_rendered(rendered)
+        # marker 的 text_from_rendered 返回 (markdown, images, metadata) 元组
+        raw_markdown = out[0] if isinstance(out, tuple) else out
+        if not isinstance(raw_markdown, str):
+            raw_markdown = str(raw_markdown)
         logger.info(f"marker 解析完成，长度 {len(raw_markdown)}")
     except Exception as e:
         logger.warning(f"marker 不可用，降级 PyMuPDF: {e}")
         try:
-            import fitz  # PyMuPDF
+            try:
+                import pymupdf as fitz  # PyMuPDF（>=1.26 推荐导入名）
+            except ImportError:
+                import fitz  # 兼容旧版
 
             doc = fitz.open(pdf_path)
             parts = [page.get_text("text") for page in doc]

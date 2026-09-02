@@ -1,0 +1,742 @@
+/* ======================= 知识库管理 · 上传导入 ======================= */
+/* 内容区容器 + 区块标题 + 上传弹窗 + 拖拽区 + 待上传文件 + 可见性选择 + 操作按钮
+ *
+ * 注意：.dropzone / .file-list / .file-item / .file-name / .file-size / .kb-new-input / .kb-select
+ * 在本文件内存在「早期版 → 重设计版」两组定义，靠后的重设计版覆盖靠前的早期版。
+ * 同组定义必须留在同一文件内，勿跨文件拆分，否则级联覆盖关系会被破坏。
+ */
+
+/* 内容区滚动容器 */
+.import-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+.panel {
+  max-width: none;
+  margin: 0;
+}
+/* 整体布局：上方两栏内容 + 屏幕底部固定添加文件条 */
+.import-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+/* 左右两栏结构：左侧导入任务，右侧已导入资料 */
+.import-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+.import-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+/* 静态区块标题（取消折叠后始终展开显示） */
+.section-head-static {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: 12px;
+}
+.section-head-static .kb-section-title {
+  margin: 0;
+}
+.section-head-static .kb-section-hint {
+  flex: 1;
+}
+.docs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* ImportPanel 作为 .kb-section 渲染时自带 10px/12px padding，会挡住批量栏的负 margin，
+   * 导致批量栏无法紧贴内容区头部。此处清零 padding，交给 .kb-content-body 统一内边距。 */
+  padding: 0;
+}
+.docs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.docs-head .card-title {
+  margin: 0;
+}
+.kb-filter,
+.kb-pick {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  max-width: 220px;
+}
+.kb-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(64, 110, 180, 0.14);
+  /* 注意：--accent 在 themes.css 中并未定义，会导致文字色失效，改用 --primary */
+  color: var(--primary, #1B2A4E);
+  font-size: 12px;
+  font-weight: 600;
+}
+.docs-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 上传对话框（modal）：点击头部的「知识导入」按钮弹出 */
+.upload-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: upload-fade .15s ease;
+}
+@keyframes upload-fade { from { opacity: 0; } to { opacity: 1; } }
+.upload-modal {
+  width: min(680px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--card, #FFFFFF);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+  animation: upload-pop .22s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+@keyframes upload-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.upload-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.upload-modal-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  background: var(--bg, #f1f5f9);
+  color: var(--text-muted, #64748b);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.upload-modal-close:hover { background: var(--border, #e2e8f0); }
+.upload-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 22px 24px;
+  overflow-y: auto;
+}
+.upload-modal-body .kb-section {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+.upload-modal-body .kb-section + .kb-section {
+  border-top: 1px dashed var(--border);
+  padding-top: 18px;
+}
+.foot-drop {
+  padding: 22px 24px;
+  border-style: solid;
+  background: linear-gradient(180deg, rgba(27, 42, 78, 0.04) 0%, transparent 100%);
+  margin-bottom: 0;
+}
+.foot-drop.dragover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  transform: scale(1.01);
+}
+.foot-hint {
+  margin: 0 !important;
+}
+.foot-files {
+  margin-top: 0;
+}
+.foot-files .btn.primary {
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+/* 上传弹窗内的导入设置：目标库（只读）+ 可见性（可切换） */
+.upload-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg, #f8fafc);
+}
+.upload-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.upload-setting-label {
+  flex: none;
+  width: 72px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+}
+.upload-setting-kb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.upload-setting-kb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-vis-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.upload-vis-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--card, #FFFFFF);
+  color: var(--text, #1e293b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.upload-vis-btn:hover {
+  background: var(--primary-light, #E8ECF5);
+  border-color: var(--primary-light, #C8D0E0);
+}
+.upload-vis-btn.active {
+  background: var(--primary, #1B2A4E);
+  border-color: var(--primary, #1B2A4E);
+  color: #fff;
+}
+
+/* 行内错误提示（带重试） */
+.kb-inline-err {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--danger-bg);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  border-left: 3px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.08);
+  animation: kb-banner-in 0.22s ease;
+}
+.kb-inline-err > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@keyframes kb-banner-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.kb-inline-err .btn {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: var(--card);
+  border-color: rgba(231, 76, 60, 0.35);
+  color: var(--danger);
+}
+.kb-inline-err .btn:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ───── 早期版：拖拽区 / 文件列表 / 知识库 pills（被下方重设计版覆盖） ───── */
+.dropzone {
+  border: 2px dashed var(--primary-light);
+  border-radius: var(--radius);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--primary-light);
+  color: var(--text-muted);
+}
+.dropzone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.dz-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.dz-sub {
+  font-size: 13px;
+}
+.file-list {
+  margin-top: 14px;
+}
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  background: var(--card);
+}
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-size {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.kb-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kb-new-input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  min-width: 120px;
+}
+
+/* ───── 重设计版：区块 / 拖拽区 / 可见性卡片 / 文件列表 ───── */
+.kb-panel {
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kb-section {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 10px 12px;
+}
+.kb-section:hover {
+  border-color: transparent;
+}
+.kb-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.kb-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.kb-section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.kb-section-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.kb-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  margin-left: 4px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 2px dashed var(--primary-light);
+  border-radius: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: linear-gradient(180deg, var(--primary-light) 0%, transparent 100%);
+  color: var(--text-muted);
+}
+.dropzone:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.dropzone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  transform: scale(1.005);
+  box-shadow: 0 4px 18px rgba(27, 42, 78, 0.1);
+}
+.dz-icon {
+  font-size: 36px;
+  margin-bottom: 4px;
+  line-height: 1;
+}
+.dz-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+.dz-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ── G-01：被拒文件原因展示 ───────────────────────────── */
+.upload-rejected {
+  border: 1px solid color-mix(in srgb, #e0a33a 45%, transparent);
+  background: color-mix(in srgb, #e0a33a 10%, transparent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-rejected-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #b8791b;
+}
+.upload-rejected-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.upload-rejected-name {
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+.upload-rejected-reason {
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.vis-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.vis-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s;
+  font: inherit;
+  color: var(--text);
+}
+.vis-card:hover:not(.disabled) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(27, 42, 78, 0.08);
+}
+.vis-card.active.vis-private {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 4px 12px rgba(27, 42, 78, 0.1);
+}
+.vis-card.active.vis-team {
+  border-color: #2E7D4F;
+  background: #E3F1E8;
+  box-shadow: 0 4px 12px rgba(46, 125, 79, 0.12);
+}
+.vis-card.active.vis-shared {
+  border-color: var(--gold);
+  background: var(--gold-light);
+  box-shadow: 0 4px 12px rgba(200, 155, 60, 0.15);
+}
+.vis-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.vis-card-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.vis-card-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.vis-card-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  transition: all 0.15s;
+}
+.file-item:hover {
+  border-color: var(--primary);
+  background: var(--card);
+}
+.file-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.file-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-size {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.file-remove {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.file-remove:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* 知识库 pills + 新建（重设计版） */
+.kb-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kb-pill:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+.kb-pill.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(27, 42, 78, 0.18);
+}
+.kb-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kb-new-input {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  min-width: 120px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.kb-new-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(27, 42, 78, 0.12);
+}
+.kb-new-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kb-new-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+.kb-new-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 上传操作区 */
+.kb-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.kb-upload-btn {
+  padding: 11px 22px;
+  font-size: 14px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kb-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: kb-spin 0.8s linear infinite;
+}
+
+/* 响应式 */
+@media (max-width: 820px) {
+  .upload-modal {
+    max-height: 92vh;
+  }
+  .import-wrap {
+    padding: 16px;
+  }
+  .kb-pill,
+  .kb-new-input,
+  .kb-new-btn {
+    font-size: 12px;
+  }
+}
+@media (max-width: 640px) {
+  .vis-picker {
+    grid-template-columns: 1fr;
+  }
+  .kb-section {
+    padding: 16px;
+  }
+}

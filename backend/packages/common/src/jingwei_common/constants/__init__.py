@@ -52,6 +52,14 @@ COLLECTION_AUTH_TOKENS = "auth_tokens"
 COLLECTION_CHAT_FEEDBACK = "chat_feedback"
 COLLECTION_AUDIT_LOG = "audit_log"  # NFR-SEC-04：关键操作审计留痕集合
 COLLECTION_KNOWLEDGE_ITEMS = "knowledge_items"  # 资料级元信息（owner/visibility），供隔离与检索过滤
+COLLECTION_KNOWLEDGE_BASES = "knowledge_bases"  # 知识库（逻辑库）元信息，用户自建 + 默认库
+
+# ── 知识库（逻辑库）──────────────────────────────────────────────
+# 逻辑库：同一 Milvus 集合内以 kb_name 字段区分，不单独建集合。
+DEFAULT_KB = "default"  # 共享默认知识库（历史兼容，已被每用户默认库取代）
+# 每用户默认知识库：以 default@<username> 命名，owner 为该用户，确保人人有独立默认库
+KB_DEFAULT_PREFIX = "default@"
+KB_NAME_MAXLEN = 64  # 库名最大长度
 
 # ── 资料可见性（多级隔离）─────────────────────────────────────
 # private：仅 owner 本人可见/可检索

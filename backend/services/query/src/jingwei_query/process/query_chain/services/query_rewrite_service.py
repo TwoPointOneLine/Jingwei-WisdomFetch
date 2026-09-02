@@ -5,9 +5,11 @@
 此处保留与原 state 契约一致的适配入口，委托给 item_name_confirm + 改写逻辑。
 """
 from jingwei_common.ai.providers import llm_provider
+from jingwei_common.config.rag_config import rag_config
 from jingwei_common.logging import logger
 
 from jingwei_query.infra.persistence.history_repository import history_repo
+from jingwei_query.rag.query.history_context import build_history_text
 from jingwei_query.process.query_chain.state import QueryGraphState
 
 
@@ -17,8 +19,15 @@ def rewrite_query(state: QueryGraphState) -> QueryGraphState:
     session_id = state.get("session_id", "")
     user_query = state.get("user_query") or query
 
-    history = history_repo.get_history(session_id, limit=10) if session_id else []
-    history_text = "\n".join(f"{m['role']}: {m['content']}" for m in history) if history else "（无历史）"
+    # 优先复用 node_query_history 已读取的历史，缺失时（如单节点调用）自行兜底读取
+    history = state.get("history") or []
+    if not history and session_id:
+        try:
+            history = history_repo.get_history(session_id, limit=rag_config.rewrite_history_limit) or []
+        except Exception as e:
+            logger.warning(f"读取对话历史失败: {e}")
+            history = []
+    history_text = build_history_text(history, rag_config.history_turns)
 
     prompt = (
         "你需要将用户的口语化问题，结合对话历史，改写成一条标准、清晰、适合向量检索的检索问句。\n"

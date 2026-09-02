@@ -1,0 +1,28 @@
+# CODEOWNERS（阶段5 · 9.4 评审可追溯）
+# 每行格式：路径模式 @owner1 @owner2
+# 匹配规则：最具体的规则生效；未列出的路径默认全体维护者。
+#
+# ⚠️ 占位维护者：请替换为真实 GitHub 账号/团队。
+#    建议：核心团队用 @org/team-core，前端用 @org/team-frontend。
+
+# 默认全部归属核心团队
+*       @jingwei/core-maintainers
+
+# 后端核心与公共底座（模型路径/配置变更影响面大）
+/backend/packages/common/      @jingwei/core-maintainers
+/backend/scripts/deploy.py      @jingwei/core-maintainers
+
+# 网关与路由（统一入口，改动需双人确认）
+/backend/services/gateway/      @jingwei/core-maintainers @jingwei/gateway-owners
+
+# 前端
+/frontend/                      @jingwei/frontend-owners
+
+# 部署与 CI/CD（误改会导致整条交付链断裂）
+/deploy/                        @jingwei/core-maintainers
+/.github/                       @jingwei/core-maintainers
+
+# 文档与治理
+/docs/                          @jingwei/core-maintainers
+/CONTRIBUTING.md                @jingwei/core-maintainers
+/CHANGELOG.md                   @jingwei/core-maintainers

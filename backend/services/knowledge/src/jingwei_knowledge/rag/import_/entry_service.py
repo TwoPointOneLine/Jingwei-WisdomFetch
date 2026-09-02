@@ -15,6 +15,10 @@ from jingwei_common.config.lm_config import lm_config
 from jingwei_common.logging import logger
 
 from jingwei_knowledge.infra.object_storage.minio_store import object_storage
+from jingwei_knowledge.rag.import_.doc_format import (
+    SUPPORTED_EXTS,
+    UnsupportedFileFormatError,
+)
 
 
 def resolve_input_file(state) -> dict:
@@ -68,17 +72,56 @@ def resolve_input_file(state) -> dict:
         os.path.splitext(os.path.basename(local_file_path))[0] if local_file_path else "untitled"
     )
     source_file = os.path.basename(local_file_path) if local_file_path else ""
+
+    # G-01：入口处硬校验格式，避免不支持的文件静默走 END 导致"成功但零条入库"。
+    if file_ext and file_ext not in SUPPORTED_EXTS:
+        raise UnsupportedFileFormatError(source_file or local_file_path)
+
     is_md = file_ext in (".md", ".markdown")
     is_pdf = file_ext == ".pdf"
+    # G-09：新增 txt/html/htm/docx 的解析路由标志
+    is_text = file_ext == ".txt"
+    is_html = file_ext in (".html", ".htm")
+    is_docx = file_ext == ".docx"
 
-    # FR-IMP-03：文档级元数据初始仅含来源文件名，其余字段由 metadata 识别阶段补全。
-    doc_meta = {"source_file": source_file}
+    # FR-IMP-03 / G-04：文档级元数据初始含来源文件名与绝对路径，
+    # 其余字段（content_type/product_name/.../institution_name/industry/market/entry_name）
+    # 由 metadata 识别阶段补全；entry_name 先留空，由切块阶段填入首标题。
+    doc_meta = {
+        "source_file": source_file,
+        "source_path": local_file_path,
+        "entry_name": "",
+    }
+
+    # G-09：除 PDF 外的所有受支持格式，统一在入口直接解析为 raw_markdown，
+    # 避免各自的 LangGraph 路由分支。PDF 仍走 node_pdf_to_md（重型解析/图片）。
+    raw_markdown = ""
+    is_markdown_ready = False
+    if is_md and local_file_path:
+        try:
+            with open(local_file_path, encoding="utf-8", errors="ignore") as f:
+                raw_markdown = f.read()
+            is_markdown_ready = True
+            logger.info(f"Markdown 文件读取完成，长度 {len(raw_markdown)}")
+        except Exception as e:
+            logger.warning(f"Markdown 文件读取失败: {e}")
+    elif (is_text or is_html or is_docx) and local_file_path:
+        try:
+            from jingwei_knowledge.rag.import_.parse_service import parse_to_markdown
+
+            raw_markdown = parse_to_markdown(local_file_path)
+            is_markdown_ready = True
+            logger.info(f"{file_ext} 解析完成，Markdown 长度 {len(raw_markdown)}")
+        except Exception as e:
+            logger.warning(f"{file_ext} 解析失败: {e}")
 
     return {
         "local_file_path": local_file_path,
         "file_title": file_title,
         "file_ext": file_ext,
-        "is_md_read_enabled": is_md,
+        "is_md_read_enabled": is_md or is_text or is_html or is_docx,
         "is_pdf_read_enabled": is_pdf,
+        "raw_markdown": raw_markdown,
+        "is_markdown_ready": is_markdown_ready,
         "doc_meta": doc_meta,
     }

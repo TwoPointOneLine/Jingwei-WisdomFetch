@@ -1,0 +1,83 @@
+# 精卫 · 本地提交门禁（pre-commit）
+#
+# 安装：
+#   cd backend && uv sync --group dev     # 安装 pre-commit
+#   pre-commit install                    # 安装 git hook（在仓库根执行）
+#   pre-commit run --all-files            # 首次全量跑一遍
+#
+# 设计说明：
+#   1) Python 侧统一用 `uv run --project backend`，确保与 backend/uv.lock 中锁定的
+#      ruff 版本一致，避免 pre-commit 自建 venv 带来的版本漂移。
+#   2) ruff 未显式指定 --config：ruff 支持层级配置发现，会为每个文件向上查找最近的
+#      pyproject.toml，因此从仓库根执行也能正确命中 backend/pyproject.toml 的 [tool.ruff]。
+#   3) 大文件阈值 2 MiB：仓库现存最大文件为 frontend/src/assets/logo-icon.png(1.25 MiB)，
+#      阈值过低会导致既有合法资源无法提交。新资源请优先走构建期处理而非入库原图。
+
+default_language_version:
+  node: "20"
+
+repos:
+  # ---------------- 通用卫生检查 ----------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(frontend/pnpm-lock\.yaml|backend/uv\.lock|backend/packages/common/uv\.lock)$
+      - id: end-of-file-fixer
+        exclude: ^(frontend/pnpm-lock\.yaml|backend/uv\.lock|backend/packages/common/uv\.lock)$
+      - id: check-yaml
+        # 校验 compose / workflow 等 YAML 语法，避免编排配置带病入库
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: check-case-conflict
+
+  # ---------------- 密钥扫描（金融场景硬性要求） ----------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  # ---------------- 后端：ruff（lint + format） ----------------
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (backend)
+        entry: uv run --project backend ruff check --force-exclude
+        language: system
+        types: [python]
+        files: ^backend/
+        require_serial: false
+
+      # 注意：ruff-format 目前为【手动阶段】(stages: [manual])。
+      # 实测 backend 下有 119 个文件尚未符合 ruff format 规范；若设为自动阶段，
+      # 每次提交都会触发大规模重排，产生无法评审的巨型 diff。
+      # 建议后续以独立 PR 一次性全量格式化（并单独 review），届时再把 stages 改为 [pre-commit]。
+      #   手动执行： pre-commit run --hook-stage manual ruff-format --all-files
+      - id: ruff-format
+        name: ruff format (backend, manual)
+        entry: uv run --project backend ruff format --force-exclude
+        language: system
+        types: [python]
+        files: ^backend/
+        stages: [manual]
+        require_serial: false
+
+      # ---------------- 前端：oxlint ----------------
+      - id: oxlint
+        name: oxlint (frontend)
+        entry: pnpm --dir frontend exec oxlint
+        language: system
+        files: ^frontend/src/
+        types: [ts, tsx]
+        require_serial: false
+
+      # ---------------- 仓库整洁性契约 ----------------
+      # 与 CI 的 layout job 同源，提前在本地发现 Dockerfile / env 模板 / 上下文问题
+      - id: layout-contract
+        name: layout contract (scripts/checks)
+        entry: python scripts/checks/run_all.py
+        language: system
+        files: ^(deploy/|scripts/checks/|\.dockerignore)$
+        pass_filenames: false
+        require_serial: true
