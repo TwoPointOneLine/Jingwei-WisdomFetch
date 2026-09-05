@@ -1,12 +1,17 @@
 # ===== 虚拟环境 =====
+# 仅忽略【根级】虚拟环境目录（如 env/），严禁写成 env/（会匹配任意层级的 env 目录，
+# 误伤 deploy/env/ 下的 .env.example / .env.prod.example 模板，见下节）。
 .venv/
 venv/
-env/
+/env/
 
-# ===== 环境变量（含敏感信息，禁止提交；.env.example 模板需保留）=====
+# ===== 环境变量（含敏感信息，禁止提交；示例模板须保留）=====
+# 真实凭据 .env（根级及任意子目录的 .env）忽略
 .env
+# 任意层级的 .env.*（如 .env.local / .env.prod）忽略，但保留示例模板
 .env.*
 !.env.example
+!.env.prod.example
 
 # ===== 日志（运行期产物）=====
 logs/
