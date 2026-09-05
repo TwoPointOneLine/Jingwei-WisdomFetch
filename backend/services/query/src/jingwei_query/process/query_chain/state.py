@@ -24,6 +24,11 @@ class QueryGraphState(TypedDict):
     task_id: str
     session_id: str
     username: str
+    # ── 检索隔离身份（多级：本人/同团队/共享；admin 全量）──────────
+    # 必须声明进 state：否则 invoke 初始化时该字段被丢弃，检索节点读不到 role，
+    # 导致 admin 全量检索与按 owner 隔离均失效。
+    user_role: str
+    user_team_id: str
     query: str
     user_query: str
     item_name: str

@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 
 /** 内置兜底值：必须与 backend jingwei_knowledge/rag/import_/doc_format.py 的 SUPPORTED_EXTS 同步 */
-export const FALLBACK_ACCEPT = '.pdf,.md,.markdown'
+export const FALLBACK_ACCEPT = '.docx,.htm,.html,.markdown,.md,.pdf,.txt'
 
 export interface SupportedFormats {
   exts: string[]
@@ -44,7 +44,7 @@ export async function loadSupportedFormats(): Promise<SupportedFormats> {
       } catch {
         // 回退默认值
       }
-      cache = { exts: FALLBACK_ACCEPT.split(','), accept: FALLBACK_ACCEPT, display: 'PDF、Markdown' }
+      cache = { exts: FALLBACK_ACCEPT.split(','), accept: FALLBACK_ACCEPT, display: 'PDF、Markdown、TXT、HTML、Word' }
       return cache
     })()
   }
@@ -64,5 +64,5 @@ export function useSupportedFormats(): { accept: string; display: string } {
       alive = false
     }
   }, [])
-  return { accept: fmt?.accept ?? FALLBACK_ACCEPT, display: fmt?.display ?? 'PDF、Markdown' }
+  return { accept: fmt?.accept ?? FALLBACK_ACCEPT, display: fmt?.display ?? 'PDF、Markdown、TXT、HTML、Word' }
 }

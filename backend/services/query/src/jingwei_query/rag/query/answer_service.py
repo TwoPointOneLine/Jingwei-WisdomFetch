@@ -147,6 +147,7 @@ def _build_citations(reranked: list) -> list:
                 "industry": meta.get("industry") or d.get("industry") or "",
                 "market": meta.get("market") or d.get("market") or "",
                 "entry_name": meta.get("entry_name") or d.get("entry_name") or "",
+                "item_name": meta.get("item_name") or d.get("item_name") or "",
                 "source_file": meta.get("source_file") or d.get("source_file") or "",
                 "source_path": meta.get("source_path") or d.get("source_path") or "",
                 # G-08：原文片段

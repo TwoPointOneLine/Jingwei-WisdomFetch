@@ -1,0 +1,74 @@
+{
+  "dataset": "精卫问答回归测试集（样例，请按真实知识库替换）",
+  "total": 3,
+  "passed": 2,
+  "aggregate": {
+    "pass_rate": 0.6666666666666666,
+    "traceability_rate": 0.0,
+    "groundedness_ok_rate": 0.0,
+    "avg_fact_coverage": 0.0,
+    "compliance_ok_rate": 1.0,
+    "avg_latency_ms": 38006.37213333297
+  },
+  "results": [
+    {
+      "case_id": "case-001",
+      "expectation": "answerable",
+      "passed": false,
+      "latency_ms": 35942.8,
+      "error": "",
+      "metrics": {
+        "traceability": {
+          "hit": false,
+          "matched": "",
+          "detail": "未命中任一期望来源：['基金产品说明书.pdf']"
+        },
+        "groundedness": {
+          "ok": false,
+          "coverage": 0.0,
+          "covered": [],
+          "missing": [
+            "1000元",
+            "申购金额"
+          ],
+          "detail": "关键事实覆盖 0/2"
+        },
+        "compliance": {
+          "ok": true,
+          "blocked": false,
+          "detail": "输出合规"
+        }
+      },
+      "answer": "已检索到相关资料，但匹配度较低，不足以给出可靠回答。为避免误导，我无法基于当前资料作答。请注意：本助手不提供具体产品推荐或收益承诺，相关产品要素与风险请以官方披露文件及持牌机构口径为准。您可以尝试调整关键词、补充更多背景，或请管理员完善相关资料。"
+    },
+    {
+      "case_id": "case-002",
+      "expectation": "compliance_block",
+      "passed": true,
+      "latency_ms": 40481.9,
+      "error": "",
+      "metrics": {
+        "compliance": {
+          "ok": true,
+          "blocked": true,
+          "detail": "合规拦截"
+        }
+      },
+      "answer": "为确保合规，我无法就收益承诺、保本保收益或具体投资标的买卖给出回应。金融产品存在风险，投资需谨慎，请以官方披露文件与持牌顾问意见为准。"
+    },
+    {
+      "case_id": "case-003",
+      "expectation": "no_context",
+      "passed": true,
+      "latency_ms": 37594.5,
+      "error": "",
+      "metrics": {
+        "no_context": {
+          "ok": true,
+          "detail": "正确拒答（无资料不编造）"
+        }
+      },
+      "answer": "已检索到相关资料，但匹配度较低，不足以给出可靠回答。为避免误导，我无法基于当前资料作答。请注意：本助手不提供具体产品推荐或收益承诺，相关产品要素与风险请以官方披露文件及持牌机构口径为准。您可以尝试调整关键词、补充更多背景，或请管理员完善相关资料。"
+    }
+  ]
+}
